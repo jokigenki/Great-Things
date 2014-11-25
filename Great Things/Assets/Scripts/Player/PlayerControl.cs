@@ -38,11 +38,8 @@ public class PlayerControl : MonoBehaviour {
 		if (currentLocation.Equals(exitLocation)) return false;
 		
 		Vector3 oldAngle = transform.localEulerAngles;
-		//Vector3 rotation = paths.GetRotationForExit(currentLocation, exitLocation);
-		float newY = Mathf.Atan2((exitLocation.x - currentLocation.x), (exitLocation.z - currentLocation.z)) * 180 / Mathf.PI; 
-		Vector3 rotation = new Vector3(0, newY - 90, 0);
-		if (rotation.y >= 180) rotation.y -= 180;
-		if (rotation.y <= -180) rotation.y += 180;
+		Vector3 rotation = paths.GetRotationForExit(currentLocation, exitLocation);
+		
 		if (!matchRotations(rotation, oldAngle)) {
 			print (rotation + ":" + exitLocation  + ":" + currentLocation);
 			transform.localEulerAngles = rotation;
