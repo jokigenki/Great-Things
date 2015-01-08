@@ -5,62 +5,105 @@ public class PlayerControl : MonoBehaviour {
 
 	public float moveSpeed = 0.02f;
 	protected Vector3 move = Vector3.zero;
-	public GeneratePaths paths;
+	public ForestTerrainGenerator paths;
+ 	public float currentPause;
+ 	public float inputPausedUntil;
  	
 	// Use this for initialization
 	void Start () {
+		inputPausedUntil = 0;
 	}
 	
 	// Update is called once per frame
 	void Update () {
-		move = new Vector3(Input.GetAxis("Horizontal"), 0f, 0f); // Input.GetAxis("Vertical")
-		move.Normalize();
-		move *= moveSpeed;
 		
-		UpdateForMove(move);
+		bool rotateIt = false;
+		if (inputPausedUntil > 0) {
+			currentPause += Time.deltaTime;
+			if (currentPause > inputPausedUntil) inputPausedUntil = 0;
+		} else {
+			rotateIt = Input.GetAxis("Jump") != 0;
+		}
+		
+		move = new Vector3(Input.GetAxis("Horizontal"), 0f, 0f);
+		move.Normalize();
+		move *= moveSpeed * Time.deltaTime;
+		
+		UpdateForMove(move, rotateIt);
 	}
 
-	void UpdateForMove (Vector3 move) {
-		MapLocation currentLocation = paths.GetMapLocationForPosition(transform.position);
+	void UpdateForMove (Vector3 move, bool rotateIt) {
+		MapLocation transitLocation = GetTransitLocation(move, false);
+		if (rotateIt) {
+			UpdateRotation(move);
+			currentPause = 0;
+			inputPausedUntil = 0.5f;
+		}
+		if (transitLocation != null) {
+			Vector3 transformedMove = transform.right * move.x;
+			transform.Translate(transformedMove, Space.World);
+		}
+		
+		Vector3 pos = transform.localPosition;
+		pos.y = paths.GetYForPosition(pos, IsRotated(transform.localEulerAngles.y)) + (transform.localScale.y / 2);
+		transform.localPosition = pos;
+		
+		UpdateForestMakers();
+	}
+	
+	MapLocation GetTransitLocation (Vector3 move, bool isPerpendicular) {
 		Vector3 transformedMove = transform.TransformDirection(move);
-		MapLocation exitLocation = paths.GetExitForMove(transform.position, transformedMove); 
+		MapLocation location = isPerpendicular
+			? paths.GetPerpendicularTransitLocationForMove(transform.position, transformedMove, IsRotated(transform.localEulerAngles.y))
+			: paths.GetTransitLocationForMove(transform.position, transformedMove, IsRotated(transform.localEulerAngles.y));
 		
-		if (exitLocation == null) return;
-		bool hasRotated = UpdateRotation(currentLocation, exitLocation, transformedMove);
-		if (!hasRotated) {
-			move = transform.right * move.x;
-			transform.Translate(move, Space.World);
-		}
+		if (location == null || (!location.tag.Equals("path") && !location.tag.Equals("entrance"))) return null;
+		return location;
 	}
 	
-	bool UpdateRotation (MapLocation currentLocation, MapLocation exitLocation, Vector3 move) {
-		if (currentLocation == null || exitLocation == null) return false;
-		if (currentLocation.Equals(exitLocation)) return false;
-		
-		Vector3 oldAngle = transform.localEulerAngles;
-		Vector3 rotation = paths.GetRotationForExit(currentLocation, exitLocation);
-		
-		if (!matchRotations(rotation, oldAngle)) {
-			print (rotation + ":" + exitLocation  + ":" + currentLocation);
-			transform.localEulerAngles = rotation;
-			Vector3 position = transform.position;
-			position.x = Mathf.RoundToInt(position.x);
-			position.z = Mathf.RoundToInt(position.z);
-			transform.position = position;
-			return true;
-		}
-		
-		return false;
+	bool IsRotated (float current) {
+		return MatchesRotation(current, 90) ||
+				MatchesRotation(current, 270);
 	}
 	
-	bool matchRotations (Vector3 updated, Vector3 existing) {
-		float x = Mathf.Abs(updated.x - existing.x);
-		if (x > 0.01) return false;
-		float y = Mathf.Abs(updated.y - existing.y);
-		if (y > 0.01) return false;
-		float z = Mathf.Abs(updated.z - existing.z);
-		if (z > 0.01) return false;
+	bool MatchesRotation(float current, float target) {
+		return Mathf.Abs(current - target) < 0.01f;
+	}
+	
+	void UpdateRotation (Vector3 move) {
+	
+		MapLocation transitLocation = null;
+		Vector3 rotation = transform.localEulerAngles;
+		bool isRotated = IsRotated(rotation.y);
+		float a = move.x < 0 ? 1f : -1f;
+		float b = move.x < 0 ? -1f : 1f;
+		float rotA = rotation.y + 90;
+		float rotB = rotation.y - 90;
 		
-		return true;
+		transitLocation = GetTransitLocation(new Vector3(0f, 0f, a), true);
+		rotation.y = rotA;
+		if (transitLocation == null) {
+			transitLocation = GetTransitLocation(new Vector3(0f, 0f, b), true);
+			rotation.y = rotB;
+		}
+		if (transitLocation == null) return;
+		
+		rotation.y = Mathf.Round(rotation.y);
+		Vector3 pos = transform.localPosition;
+		
+		if (isRotated) {
+			pos.z = Mathf.Round(pos.z);
+		} else {
+			pos.x = Mathf.Round(pos.x);
+		}
+		transform.localEulerAngles = rotation;
+		transform.localPosition = pos;	 
+	}
+	
+	void UpdateForestMakers () {
+		int x = Mathf.RoundToInt(transform.localPosition.x);
+		int z = Mathf.RoundToInt(transform.localPosition.z);
+		int r = Mathf.RoundToInt(transform.localEulerAngles.y);
+		paths.UpdateForestAreasInFrontOfPosition(x, z, r);
 	}
 }

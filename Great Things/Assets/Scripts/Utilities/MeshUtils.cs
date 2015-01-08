@@ -3,9 +3,10 @@ using System.Collections;
 
 public class MeshUtils {
 
-	public static GameObject CreatePlane(Vector3[] vertices, Material mat, bool reverse) {
+	public static GameObject CreatePlane(string name, Vector3[] vertices, Material mat, bool reverse) {
 	
 		// 0:bottom-left, 1:bottom-right, 2:top-left, 3:top-right
+		// 0:+x+z, -x+z, +x-z, -x-z 
 		Mesh m = new Mesh();
 		m.name = "Scripted_Plane_New_Mesh";
 		m.vertices = vertices;
@@ -20,11 +21,12 @@ public class MeshUtils {
 			1, 2, 3};
 		}
 		m.RecalculateNormals();
-		GameObject plane = new GameObject("New_Plane_From_Script");
+		GameObject plane = new GameObject(name);
 		MeshFilter meshFilter = (MeshFilter)plane.AddComponent(typeof(MeshFilter));
-		MeshRenderer meshRenderer = (MeshRenderer)plane.AddComponent(typeof(MeshRenderer));
-		meshRenderer.material = mat;
 		meshFilter.mesh = m;
+		plane.AddComponent(typeof(MeshCollider));
+		MeshRenderer meshRenderer = (MeshRenderer)plane.AddComponent(typeof(MeshRenderer));
+		if (mat != null) meshRenderer.material = mat;
 		meshRenderer.castShadows = false;
 		meshRenderer.receiveShadows = false;
 		return plane;

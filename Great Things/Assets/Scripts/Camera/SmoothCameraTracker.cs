@@ -5,8 +5,8 @@ public class SmoothCameraTracker : MonoBehaviour {
 
 	[HideInInspector]
 	public GameObject target;
-	public GameObject camera;
-	
+	public GameObject followCamera;
+	public float easeSpeed = 0.0016f;
 	Vector3 targetPosition;
 	
 	float targetRotation;
@@ -15,7 +15,7 @@ public class SmoothCameraTracker : MonoBehaviour {
 	
 	//Vector3 followerVelocity;
 	Vector3 pastCameraPosition, pastTargetPosition;
-	float pastCameraRotation, pastTargetRotation;
+	//float pastCameraRotation, pastTargetRotation;
 	
 	bool firstPositionSet;
 	
@@ -30,7 +30,7 @@ public class SmoothCameraTracker : MonoBehaviour {
 		if (target == null) return;
 	
 		Transform targetTransform = target.transform;
-		Transform camTransform = camera.transform;
+		Transform camTransform = followCamera.transform;
 		
 		float playerRotation = targetTransform.eulerAngles.y;
 		float x = distance * Mathf.Sin(playerRotation * Mathf.PI / 180);
@@ -42,28 +42,28 @@ public class SmoothCameraTracker : MonoBehaviour {
 		
 		if (!firstPositionSet) {
 			pastCameraPosition = new Vector3(targetPosition.x, transform.position.y, targetPosition.z);
-			pastCameraRotation = targetRotation;
-			pastTargetRotation = targetRotation;
+			//pastCameraRotation = targetRotation;
+			//pastTargetRotation = targetRotation;
 			pastTargetPosition = targetPosition;
 			firstPositionSet = true;
 			currentRotation = new Vector3(0, targetRotation, 0);
-			camera.transform.position = pastCameraPosition;
+			followCamera.transform.position = pastCameraPosition;
 		}
 
 		// move camera //
-		Vector3 lerped = SuperSmoothLerp( pastCameraPosition, pastTargetPosition, targetPosition, Time.time, 0.0016f );
+		Vector3 lerped = SuperSmoothLerp( pastCameraPosition, pastTargetPosition, targetPosition, Time.time, easeSpeed );
 		lerped.y = pastCameraPosition.y;
 		pastCameraPosition = camTransform.position;
 		pastTargetPosition = targetPosition;
-		camera.transform.position = lerped;
+		followCamera.transform.position = lerped;
 		
 		// rotate camera
-		float lerpedRotation = SuperSmoothLerpValue(pastCameraRotation, pastTargetRotation, targetRotation, Time.time, 0.0016f );
+		//float lerpedRotation = SuperSmoothLerpValue(pastCameraRotation, pastTargetRotation, targetRotation, Time.time, 0.0016f );
 		float lookAtRotation = Mathf.Atan2(targetTransform.position.x - camTransform.position.x, targetTransform.position.z - camTransform.position.z) / Mathf.PI * 180;
 		currentRotation.y = lookAtRotation;
-		pastCameraRotation = currentRotation.y;
-		pastTargetRotation = targetRotation;
-		camera.transform.localEulerAngles = currentRotation;
+		//pastCameraRotation = currentRotation.y;
+		//pastTargetRotation = targetRotation;
+		followCamera.transform.localEulerAngles = currentRotation;
 	}
 	
 	
