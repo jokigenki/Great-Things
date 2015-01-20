@@ -5,9 +5,10 @@ public class ForestTerrainGenerator : MonoBehaviour
 {
 	public Material treeMaterial;
 	public Material bushMaterial;
+	public Material rockMaterial;
 	public Material groundMaterial;
 	public Texture2D pathMap;
-	public GameObject playerPrefab;
+	public GameObject player;
 	public Camera playerCamera;
 	public Material pathMaterial;
 	public GameObject floorPrefab;
@@ -125,8 +126,9 @@ public class ForestTerrainGenerator : MonoBehaviour
 					
 					forestArea.rect = new Rect(x, z, areaWidth, areaHeight);
 					forestArea.Ground = CreateGround (x - 0.5f, z - 0.5f, areaWidth, areaHeight, map.locations, groundMaterial);
-					forestArea.AddForestObjects(CreateQuads ("trees", forestArea.rect, 3f, 0.65f, map.locations, 0.9f, randomiser, treeMaterial));
-					forestArea.AddForestObjects(CreateQuads ("bushes", forestArea.rect, 0.25f, 0.4f, map.locations, 0.8f, randomiser, bushMaterial));
+					forestArea.AddForestObjects(CreateQuads ("trees", forestGO, forestArea.rect, 3.5f, 0.5f, map.locations, 1.1f, randomiser, treeMaterial));
+					forestArea.AddForestObjects(CreateQuads ("bushes", forestGO, forestArea.rect, 0.25f, 0.9f, map.locations, 0.4f, randomiser, bushMaterial));
+					forestArea.AddForestObjects(CreateQuads ("rocks", forestGO, forestArea.rect, 0.2f, 1.5f, map.locations, 0.2f, randomiser, rockMaterial));
 					
 					forestAreas.Add (forestGO);
 				}
@@ -148,10 +150,11 @@ public class ForestTerrainGenerator : MonoBehaviour
 	void CreatePlayer (Map map)
 	{
 		MapLocation entrance = (MapLocation)map.entrances [0];
-		GameObject player = (GameObject)Instantiate (playerPrefab, Vector3.zero, Quaternion.identity);
+		//GameObject player = (GameObject)Instantiate (playerPrefab, Vector3.zero, Quaternion.identity);
+		player.SetActive(true);
 		Vector3 playerPosition = new Vector3 (entrance.x, entrance.y + 0.5f + (player.transform.localScale.y / 2), entrance.z);
 		player.transform.position = playerPosition;
-		PlayerControl control = player.GetComponent<PlayerControl> ();
+		PlayerControl control = GetComponent<PlayerControl> ();
 		control.paths = this;
 		
 		SmoothCameraTracker tracker = playerCamera.GetComponent<SmoothCameraTracker> ();
@@ -186,6 +189,7 @@ public class ForestTerrainGenerator : MonoBehaviour
 	
 	public MapLocation GetTransitLocationForMove (Vector3 position, Vector3 move, bool rotated)
 	{
+		if (map == null) return null;
 		if (!rotated) {
 			MapLocation xLocation = map.GetXLocation (position, move);
 			if (xLocation != null)
@@ -244,10 +248,11 @@ public class ForestTerrainGenerator : MonoBehaviour
 		return ground;
 	}
 	
-	public GameObject CreateQuads (string name, Rect rect, float scale, float density, MapLocation[,] locations, float minimumDistanceBetween, SeededRandomiser randomiser, Material material) {
+	public GameObject CreateQuads (string name, GameObject parent, Rect rect, float scale, float density, MapLocation[,] locations, float minimumDistanceBetween, SeededRandomiser randomiser, Material material) {
 		
 		GameObject go = new GameObject();
 		go.name = name;
+		go.transform.parent = parent.transform;
 		
 		Vector3 holderPos = go.transform.localPosition;
 		holderPos.x = rect.x;
@@ -256,50 +261,65 @@ public class ForestTerrainGenerator : MonoBehaviour
 		go.transform.localPosition = holderPos;
 		
 		ForestObjects forestObjects = (ForestObjects)go.AddComponent(typeof(ForestObjects));
-		int totalTrees = Mathf.RoundToInt(rect.width * rect.height * density);
+		int totalQuads = Mathf.RoundToInt(rect.width * rect.height * density);
 		
-		GameObject[] xAxis = new GameObject[totalTrees];
-		GameObject[] zAxis = new GameObject[totalTrees];
+		ArrayList xAxisArray = new ArrayList();
+		ArrayList zAxisArray = new ArrayList();
 		int timeoutMax = 100;
 		int timeout = timeoutMax;
 		int treesMade = 0;
 		minimumDistanceBetween *= minimumDistanceBetween;
-		while (treesMade < totalTrees && timeout > 0) {
-			float xPosition = randomiser.GetRandomFromRange(0, rect.xMax - rect.xMin);
-			float zPosition = randomiser.GetRandomFromRange(0, rect.yMax - rect.yMin);
+		while (treesMade < totalQuads && timeout > 0) {
+			float xPosition = randomiser.GetRandomFromRange(0, rect.xMax - rect.xMin - 0.5f);
+			float zPosition = randomiser.GetRandomFromRange(0, rect.yMax - rect.yMin - 0.5f);
 			int locationX = Mathf.FloorToInt(rect.x + xPosition);
 			int locationZ = Mathf.FloorToInt(rect.y + zPosition);
 			float yPosition = (scale / 2) + GetLowestYForLocation(locations[locationX, locationZ]);
 			Vector3 pos = new Vector3(xPosition, yPosition, zPosition);
-			if (IsValidPosition(pos, xAxis, treesMade, minimumDistanceBetween)) {	
+			if (IsValidPosition(pos, xAxisArray, treesMade, minimumDistanceBetween)) {	
 				timeout = timeoutMax;
 				
-				GameObject plane1 = GameObject.CreatePrimitive(PrimitiveType.Quad);
-				MeshRenderer renderer = plane1.GetComponent<MeshRenderer>();
-				renderer.material = material;
-				plane1.transform.parent = go.transform;
-				plane1.transform.localScale = new Vector3(scale, scale, scale);
-				plane1.transform.localPosition = pos;
+				GameObject planeX = CreateQuad(go, material, scale, pos, 0, 0, 1, 1);
+				GameObject planeZ = CreateQuad(go, material, scale, pos, 0, 0, 1, 1);
+				planeZ.transform.localEulerAngles = new Vector3(0, 90, 0);
 				
-				GameObject plane2 = GameObject.CreatePrimitive(PrimitiveType.Quad);
-				renderer = plane2.GetComponent<MeshRenderer>();
-				renderer.material = material;
-				plane2.transform.parent = go.transform;
-				plane2.transform.localEulerAngles = new Vector3(0, 90, 0);
-				plane2.transform.localScale = new Vector3(scale, scale, scale);
-				plane2.transform.localPosition = pos;
-				
-				xAxis[treesMade] = plane1;
-				zAxis[treesMade++] = plane2;
+				xAxisArray.Add(planeX);
+				zAxisArray.Add(planeZ);
+				treesMade++;
 			} else {
 				timeout--;
 			}
 		}
 		
-		forestObjects.xAxis = xAxis;
-		forestObjects.zAxis = zAxis;
+		forestObjects.SetXAxis(go, ListToArray(xAxisArray), material);
+		forestObjects.SetZAxis(go, ListToArray(zAxisArray), material);
+		//forestObjects.XAxis = ListToArray(xAxisArray);
+		//forestObjects.ZAxis = ListToArray(zAxisArray);
 		
 		return go;
+	}
+	
+	GameObject[] ListToArray (ArrayList list) {
+		GameObject[] arr = new GameObject[list.Count];
+		int i = 0;
+		foreach (GameObject obj in list) {
+			arr[i++] = obj;
+		}
+		
+		return arr;
+	}
+	
+	GameObject CreateQuad (GameObject parent, Material material, float scale, Vector3 pos, float uvLeft, float uvTop, float uvRight, float uvBottom) { 
+			GameObject quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+		MeshRenderer renderer = quad.GetComponent<MeshRenderer>();
+		renderer.material = material;
+		quad.transform.parent = parent.transform;
+		quad.transform.localScale = new Vector3(scale, scale, scale);
+		quad.transform.localPosition = pos;
+		//Mesh mesh = quad.GetComponent<MeshFilter>().mesh;
+		//mesh.uv = new Vector2[] { new Vector2(uvLeft, uvTop), new Vector2(uvRight, uvBottom), new Vector2(uvRight, uvTop), new Vector2(uvLeft, uvBottom)};
+		
+		return quad;
 	}
 	
 	float GetLowestYForLocation (MapLocation location) {
@@ -311,9 +331,9 @@ public class ForestTerrainGenerator : MonoBehaviour
 		return min;
 	}
 	
-	bool IsValidPosition (Vector3 position, GameObject[] trees, int maxTree, float minDist) {
+	bool IsValidPosition (Vector3 position, ArrayList objects, int maxTree, float minDist) {
 		for (int i = 0; i < maxTree; i++) {
-			GameObject tree = trees[i];
+			GameObject tree = (GameObject)objects[i];
 			Vector3 treePos = tree.transform.localPosition;
 			float xDist = (treePos.x - position.x);
 			float zDist = (treePos.z - position.z);

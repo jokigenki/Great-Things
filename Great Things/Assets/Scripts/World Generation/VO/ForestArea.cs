@@ -38,8 +38,8 @@ public class ForestArea : MonoBehaviour {
 		foreach (GameObject go in forestObjects) { 
 			ForestObjects objects = (ForestObjects)go.GetComponent<ForestObjects>();
 			objects.AxisEnabled = !IsInFrontOf(x, z, rotated, flipped);
-			objects.FlipObjects( flipped, "x");
-			objects.FlipObjects( flipped, "z");
+			//objects.FlipObjects( flipped, "x");
+			//objects.FlipObjects( flipped, "z");
 			
 			objects.EnableObjects(!rotated, "x");
 			objects.EnableObjects(rotated, "z");
