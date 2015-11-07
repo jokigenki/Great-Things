@@ -3,17 +3,16 @@ using System.Collections;
 
 public class MapUtils {
 
+	// Is the given position within the map?
 	public static bool IsMapPositionValid (int x, int z, int mapWidth, int mapDepth) {
 		if (x < 0 || x >= mapWidth || z < 0 || z >= mapDepth) return false;
 		
 		return true;
 	}
 	
-	public static Map BuildMap (Texture2D texture, MapTag[] tags) {
-		return null;
-	}
-	
-	public static void BuildHeightMap (Map map, SeededRandomiser randomiser)
+	// Iterates through each location in the map and gives it a randomised height
+	// then builds an array containing the heights of each location quad's corners
+	public static void SetHeightsForMap (Map map, SeededRandomiser randomiser)
 	{
 		MapLocation[,] locations = map.locations;
 		int hilliness = map.hilliness;
@@ -33,6 +32,8 @@ public class MapUtils {
 		SetCornerHeights(map);
 	}
 	
+	// changes the height for the location at xz
+	// if recurse is true, then the heights of surrounding tiles will be modified to give a smoother contour
 	public static void ChangeHeightForPosition (int x, int z, int mapWidth, int mapDepth, MapLocation[,] locations, float value, bool recurse)
 	{
 		if (!MapUtils.IsMapPositionValid(x, z, mapWidth, mapDepth)) return;
@@ -43,23 +44,30 @@ public class MapUtils {
 		locations [x, z].y = currentValue;
 		
 		if (recurse) {
-			float halfValue = value * 0.5f;
-			float quarterValue = value * 0.25f;
-			ChangeHeightForPosition (x - 1, z, mapWidth, mapDepth, locations, halfValue, false);
-			ChangeHeightForPosition (x - 2, z, mapWidth, mapDepth, locations, quarterValue, false);
-			ChangeHeightForPosition (x + 1, z, mapWidth, mapDepth, locations, halfValue, false);
-			ChangeHeightForPosition (x + 2, z, mapWidth, mapDepth, locations, quarterValue, false);
-			ChangeHeightForPosition (x, z - 1, mapWidth, mapDepth, locations, halfValue, false);
-			ChangeHeightForPosition (x, z - 2, mapWidth, mapDepth, locations, quarterValue, false);
-			ChangeHeightForPosition (x, z + 1, mapWidth, mapDepth, locations, halfValue, false);
-			ChangeHeightForPosition (x, z + 2, mapWidth, mapDepth, locations, quarterValue, false);
-			ChangeHeightForPosition (x - 1, z - 1, mapWidth, mapDepth, locations, quarterValue, false);
-			ChangeHeightForPosition (x - 1, z + 1, mapWidth, mapDepth, locations, quarterValue, false);
-			ChangeHeightForPosition (x + 1, z - 1, mapWidth, mapDepth, locations, quarterValue, false);
-			ChangeHeightForPosition (x + 1, z + 1, mapWidth, mapDepth, locations, quarterValue, false);
+			ChangeHeightForSurroundingLocations(x, z, mapWidth, mapDepth, locations, value);
 		}
 	}
 	
+	// Changes the heights of the tiles around the given tile
+	public static void ChangeHeightForSurroundingLocations (int x, int z, int mapWidth, int mapDepth, MapLocation[,] locations, float value) {
+		float halfValue = value * 0.5f;
+		float quarterValue = value * 0.25f;
+		
+		ChangeHeightForPosition (x - 1, z, mapWidth, mapDepth, locations, halfValue, false);
+		ChangeHeightForPosition (x - 2, z, mapWidth, mapDepth, locations, quarterValue, false);
+		ChangeHeightForPosition (x + 1, z, mapWidth, mapDepth, locations, halfValue, false);
+		ChangeHeightForPosition (x + 2, z, mapWidth, mapDepth, locations, quarterValue, false);
+		ChangeHeightForPosition (x, z - 1, mapWidth, mapDepth, locations, halfValue, false);
+		ChangeHeightForPosition (x, z - 2, mapWidth, mapDepth, locations, quarterValue, false);
+		ChangeHeightForPosition (x, z + 1, mapWidth, mapDepth, locations, halfValue, false);
+		ChangeHeightForPosition (x, z + 2, mapWidth, mapDepth, locations, quarterValue, false);
+		ChangeHeightForPosition (x - 1, z - 1, mapWidth, mapDepth, locations, quarterValue, false);
+		ChangeHeightForPosition (x - 1, z + 1, mapWidth, mapDepth, locations, quarterValue, false);
+		ChangeHeightForPosition (x + 1, z - 1, mapWidth, mapDepth, locations, quarterValue, false);
+		ChangeHeightForPosition (x + 1, z + 1, mapWidth, mapDepth, locations, quarterValue, false);
+	}
+	
+	// Sets the corner heights each of the map locations, which can then be used to set the vertex height positions
 	public static void SetCornerHeights (Map map) {
 		MapLocation[,] locations = map.locations;
 		
@@ -73,6 +81,7 @@ public class MapUtils {
 		}
 	}
 	
+	// Finds the average height for the 4 location corners surrounding the given vertex at the xz position
 	public static float GetHeightForPosition (MapLocation[,] locations, int x, int z, int vertex) {
 		
 		MapLocation location = locations[x, z]; 
@@ -111,6 +120,7 @@ public class MapUtils {
 		return (a + b + c + d) / 4f;
 	}
 	
+	// Gets the height for the position, or 0 if the position is not valid
 	public static float GetHeightForPosition (MapLocation[,] locations, int x, int z) {
 		if (IsMapPositionValid(x, z, locations.GetLength(0), locations.GetLength(1))) return locations[x, z].y;
 		return 0;

@@ -3,7 +3,6 @@ using System.Collections;
 
 public class SmoothCameraTracker : MonoBehaviour {
 
-	[HideInInspector]
 	public GameObject target;
 	public GameObject followCamera;
 	public float easeSpeed = 0.0016f;
@@ -11,28 +10,28 @@ public class SmoothCameraTracker : MonoBehaviour {
 	
 	float targetRotation;
 	Vector3 currentRotation;
-	float distance = 10;
+	float distance = 5;
 	
 	//Vector3 followerVelocity;
 	Vector3 pastCameraPosition, pastTargetPosition;
 	//float pastCameraRotation, pastTargetRotation;
+	
+	PlayerControl control;
 	
 	bool firstPositionSet;
 	
 	void Start()
 	{
 		targetRotation = 0;
+		control = target.GetComponent<PlayerControl>();
 	}
 	
-	
 	void Update()
-	{
-		if (target == null) return;
-	
+	{	
 		Transform targetTransform = target.transform;
 		Transform camTransform = followCamera.transform;
 		
-		float playerRotation = targetTransform.eulerAngles.y;
+		float playerRotation = control != null ? control.yRotation : targetTransform.eulerAngles.y;
 		float x = distance * Mathf.Sin(playerRotation * Mathf.PI / 180);
 		float z = distance * Mathf.Cos(playerRotation * Mathf.PI / 180);
 		

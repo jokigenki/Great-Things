@@ -2,78 +2,133 @@
 using System.Collections;
 
 public class PlayerControl : MonoBehaviour {
-
-	public GameObject target;
+	
 	public float moveSpeed = 0.02f;
+	public Forest paths;
+	public float runThreshold = 0.25f;
+	public float jumpForce = 10f;
+	public float gravity = 0.25f;
+	
 	protected Vector3 move = Vector3.zero;
-	public ForestTerrainGenerator paths;
- 	public float currentRotationPause;
- 	public float rotationInputPausedUntil;
- 	
- 	private Animator animator;
- 	
+	private Animator animator;
+	private bool isWalking;
+	private bool isRunning;
+	private bool isJumping;
+	private float currentJumpSpeed;
+	private Vector3 lastMove;
+	
+	private bool rotateReleased;
+	
+	[HideInInspector]
+	public float yRotation;
+	
 	// Use this for initialization
 	void Start () {
-		rotationInputPausedUntil = 0;
-		animator = target.GetComponent<Animator>();
+		animator = gameObject.GetComponent<Animator>();
+		yRotation = transform.localEulerAngles.y;
+		rotateReleased = true;
+		
+		print (365 % 360);
+		print (-6 % 360);
 	}
 	
 	// Update is called once per frame
 	void Update () {
+	
+		if (paths != null && !paths.ready) return;
 		
 		bool rotateIt = false;
-		if (rotationInputPausedUntil > 0) {
-			currentRotationPause += Time.deltaTime;
-			if (currentRotationPause > rotationInputPausedUntil) rotationInputPausedUntil = 0;
-		} else {
-			rotateIt = Input.GetAxis("Jump") != 0;
+		rotateIt = Input.GetAxis("Switch") != 0;
+		
+		if (!rotateReleased) {
+			if (!rotateIt) rotateReleased = true;
+			else rotateIt = false;
+		}
+		if (rotateIt) rotateReleased = false; 
+					
+		Vector3 newMove = new Vector3(Input.GetAxis("Horizontal"), move.y, 0f);
+		float walk = Input.GetAxis("Walk");
+		if (walk != 0) newMove.x /= 2;
+		
+		float speed = Mathf.Abs(newMove.x);
+		isWalking = speed > 0.01f;
+		isRunning = speed > runThreshold;
+		
+		newMove *= moveSpeed * Time.deltaTime;
+		
+		float vertInput = Input.GetAxis("Vertical");
+		if (vertInput > 0 && newMove.y == 0) {
+			currentJumpSpeed = jumpForce;
+			newMove.y = currentJumpSpeed;
+			isJumping = true;
+		} else if (isJumping) {
+			newMove.y += currentJumpSpeed;
 		}
 		
-		move = new Vector3(Input.GetAxis("Horizontal"), 0f, 0f);
-		move.Normalize();
-		move *= moveSpeed * Time.deltaTime;
+		if (newMove.y > 0) {
+			newMove.x = move.x;
+			currentJumpSpeed -= gravity;
+		} else {
+			newMove.y = 0;
+			currentJumpSpeed = 0;
+			isJumping = false;
+		}
 		
+		move = newMove;
 		UpdateForMove(move, rotateIt);
+		
+		if (move.x != 0) lastMove = move;
 	}
-
+	
 	void UpdateForMove (Vector3 move, bool rotateIt) {
-		MapLocation transitLocation = GetTransitLocation(move, false);
+		MapLocation transitLocation = GetTransitLocation(move, yRotation);
 		if (rotateIt) {
 			UpdateRotation(move);
-			currentRotationPause = 0;
-			rotationInputPausedUntil = 0.5f;
-		}
-		if (transitLocation != null) {
-			Vector3 transformedMove = target.transform.right * move.x;
-			target.transform.Translate(transformedMove, Space.World);
 		}
 		
-		Vector3 pos = target.transform.localPosition;
-		pos.y = paths.GetYForPosition(pos, IsRotated(target.transform.localEulerAngles.y)) + (target.transform.localScale.y / 2);
-		target.transform.localPosition = pos;
+		
+		if (transitLocation != null) {
+			Vector3 transformedMove = GetTransformedMove (yRotation) * move.x;
+			gameObject.transform.Translate(transformedMove, Space.World);
+		} else {
+			isRunning = false;
+			isWalking = false;
+		}
+		
+		if (paths != null) {
+			Vector3 pos = gameObject.transform.localPosition;
+			pos.y = paths.GetYForPosition(pos, IsRotated(yRotation));
+			gameObject.transform.localPosition = pos;
+		}
 		
 		UpdateForestMakers();
-		
 		UpdateAnimator(move);
 	}
 	
+	Vector3 GetTransformedMove (float yRotation) {
+		if (yRotation == 180) return Vector3.left;
+		else if (yRotation == 90) return Vector3.back;
+		else if (yRotation == 270) return Vector3.forward;
+	
+		return Vector3.right;
+	}
+	
 	void UpdateAnimator (Vector3 move) {
+		animator.SetBool("IsWalking", isWalking);
+		animator.SetBool("IsRunning", isRunning);
+		animator.SetBool("IsJumping", isJumping);
+		
 		if (move.x > 0) {
 			animator.SetInteger("Direction", 1);
-			animator.SetBool("IsMoving", true);
 		} else if (move.x < 0) {
 			animator.SetInteger("Direction", -1);
-			animator.SetBool("IsMoving", true);
-		} else {
-			animator.SetBool("IsMoving", false);
 		}
 	}
 	
-	MapLocation GetTransitLocation (Vector3 move, bool isPerpendicular) {
-		Vector3 transformedMove = target.transform.TransformDirection(move);
-		MapLocation location = isPerpendicular
-			? paths.GetPerpendicularTransitLocationForMove(target.transform.position, transformedMove, IsRotated(target.transform.localEulerAngles.y))
-				: paths.GetTransitLocationForMove(target.transform.position, transformedMove, IsRotated(target.transform.localEulerAngles.y));
+	MapLocation GetTransitLocation (Vector3 move, float yRotation) {
+		if (paths == null) return null;
+		Vector3 transformedMove = GetTransformedMove (yRotation) * move.x;
+		MapLocation location = paths.GetTransitLocationForMove(gameObject.transform.position, transformedMove, IsRotated(yRotation));
 		
 		if (location == null || (!location.tag.Equals("path") && !location.tag.Equals("entrance"))) return null;
 		return location;
@@ -81,7 +136,7 @@ public class PlayerControl : MonoBehaviour {
 	
 	bool IsRotated (float current) {
 		return MatchesRotation(current, 90) ||
-				MatchesRotation(current, 270);
+			MatchesRotation(current, 270);
 	}
 	
 	bool MatchesRotation(float current, float target) {
@@ -89,39 +144,48 @@ public class PlayerControl : MonoBehaviour {
 	}
 	
 	void UpdateRotation (Vector3 move) {
-	
+		
 		MapLocation transitLocation = null;
-		Vector3 rotation = target.transform.localEulerAngles;
-		bool isRotated = IsRotated(rotation.y);
-		float a = move.x < 0 ? 1f : -1f;
-		float b = move.x < 0 ? -1f : 1f;
-		float rotA = rotation.y + 90;
-		float rotB = rotation.y - 90;
+		bool isRotated = IsRotated(yRotation);
+		float rotA = RationaliseAngle(yRotation + 90);
+		float rotB = RationaliseAngle(yRotation - 90);
 		
-		transitLocation = GetTransitLocation(new Vector3(0f, 0f, a), true);
-		rotation.y = rotA;
+		if (move.x == 0) move = lastMove;
+		transitLocation = GetTransitLocation(move, rotA);
+		float newRot = rotA;
 		if (transitLocation == null) {
-			transitLocation = GetTransitLocation(new Vector3(0f, 0f, b), true);
-			rotation.y = rotB;
+			transitLocation = GetTransitLocation(move, rotB);
+			newRot = rotB;
 		}
-		if (transitLocation == null) return;
 		
-		rotation.y = Mathf.Round(rotation.y);
-		Vector3 pos = target.transform.localPosition;
+		if (transitLocation == null) {
+			if (move.x > 0) newRot = rotA;
+			else newRot = rotB;
+		}
+		
+		yRotation = Mathf.Round(newRot);
+		Vector3 pos = gameObject.transform.localPosition;
 		
 		if (isRotated) {
 			pos.z = Mathf.Round(pos.z);
 		} else {
 			pos.x = Mathf.Round(pos.x);
 		}
-		target.transform.localEulerAngles = rotation;
-		target.transform.localPosition = pos;	 
+		gameObject.transform.localPosition = pos;
+	}
+	
+	// Return a value between 
+	float RationaliseAngle (float angle) {
+		while (angle < 0) angle = 360 - angle;
+		while (angle > 360) angle = angle - 360;
+		
+		return angle;
 	}
 	
 	void UpdateForestMakers () {
-		int x = Mathf.RoundToInt(target.transform.localPosition.x);
-		int z = Mathf.RoundToInt(target.transform.localPosition.z);
-		int r = Mathf.RoundToInt(target.transform.localEulerAngles.y);
-		paths.UpdateForestAreasInFrontOfPosition(x, z, r);
+		int x = Mathf.RoundToInt(gameObject.transform.localPosition.x);
+		int z = Mathf.RoundToInt(gameObject.transform.localPosition.z);
+		int r = Mathf.RoundToInt(yRotation);
+		if (paths != null) paths.UpdateForestAreaVisibility (x, z, r);
 	}
 }

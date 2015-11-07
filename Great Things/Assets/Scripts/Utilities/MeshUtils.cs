@@ -27,7 +27,7 @@ public class MeshUtils {
 		plane.AddComponent(typeof(MeshCollider));
 		MeshRenderer meshRenderer = (MeshRenderer)plane.AddComponent(typeof(MeshRenderer));
 		if (mat != null) meshRenderer.material = mat;
-		meshRenderer.castShadows = false;
+		meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 		meshRenderer.receiveShadows = false;
 		return plane;
 	}

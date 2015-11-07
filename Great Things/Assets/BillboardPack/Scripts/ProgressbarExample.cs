@@ -6,6 +6,6 @@ public class ProgressbarExample : MonoBehaviour {
 	// Update is called once per frame
 	void Update () {
 		float f =Mathf.Clamp01(progressPercent * 0.01f);
-		renderer.material.SetFloat("_Progress", f);
+		GetComponent<Renderer>().material.SetFloat("_Progress", f);
 	}
 }

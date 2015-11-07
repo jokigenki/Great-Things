@@ -59,7 +59,7 @@ public class CubeBranch {
 		leaves.transform.localScale = leavesScale;
 		leaves.transform.localPosition = new Vector3(0, leavesAxisLength / 2, 0);
 		leaves.transform.localEulerAngles = new Vector3(-36.0f, 0, 45.0f);
-		leaves.AddComponent("CubeTexturer");
+		leaves.AddComponent<CubeTexturer>();
 		
 		// texture
 		//Vector2 texScale = new Vector2(leavesAxisLength * scale.x, leavesAxisLength * scale.x);

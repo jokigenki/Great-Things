@@ -69,36 +69,18 @@ public class Map {
 		return location;
 	}
 	
-	public MapLocation GetXLocation (Vector3 position, Vector3 move)
-	{
-		int newX = Mathf.RoundToInt (position.x);
+	public MapLocation GetXLocation (Vector3 position, Vector3 move) {
+		int newX = move.x > 0 ? Mathf.CeilToInt (position.x + move.x) : Mathf.FloorToInt (position.x + move.x);
 		int newZ = Mathf.RoundToInt (position.z);
-		
-		MapLocation xLocation = null;
-		if (move.x > 0) {
-			newX = Mathf.CeilToInt (position.x + move.x);
-			xLocation = GetMapLocationForPosition (newX, newZ);
-		} else if (move.x < 0) {
-			newX = Mathf.FloorToInt (position.x + move.x);
-			xLocation = GetMapLocationForPosition (newX, newZ);
-		}
+		MapLocation xLocation = GetMapLocationForPosition (newX, newZ);
 		
 		return xLocation;
 	}
 	
-	public MapLocation GetZLocation (Vector3 position, Vector3 move)
-	{
+	public MapLocation GetZLocation (Vector3 position, Vector3 move) {
 		int newX = Mathf.RoundToInt (position.x);
-		int newZ = Mathf.RoundToInt (position.z);
-		
-		MapLocation zLocation = null;
-		if (move.z > 0) {
-			newZ = Mathf.CeilToInt (position.z + move.z);
-			zLocation = GetMapLocationForPosition (newX, newZ);
-		} else if (move.z < 0) {
-			newZ = Mathf.FloorToInt (position.z + move.z);
-			zLocation = GetMapLocationForPosition (newX, newZ);
-		}
+		int newZ = move.z > 0 ? Mathf.CeilToInt (position.z + move.z) : Mathf.FloorToInt (position.z + move.z);
+		MapLocation zLocation = GetMapLocationForPosition (newX, newZ);
 		
 		return zLocation;
 	}

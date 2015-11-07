@@ -9,15 +9,24 @@ public class ForestObjects : MonoBehaviour {
 	public GameObject xAxisCombined;
 	public GameObject zAxisCombined;
 	
-	bool axisEnabled = true;
+	public ColourMaterialMap materialMap;
+	public SeededRandomiser randomiser;
+	
 	bool xEnabled = true;
 	bool zEnabled = true;
-	//bool xFlipped = false;
-	//bool zFlipped = false;
-	//float currentXAlpha = 1f;
-	//float currentZAlpha = 1f;
-	//float targetXAlpha = 1f;
-	//float targetZAlpha = 1f;
+		
+	bool rendererEnabled;
+	
+	
+	public bool RendererEnabled {
+		get { return rendererEnabled; }
+		set {
+			if (rendererEnabled == value) return;
+			rendererEnabled = value;
+			xAxisCombined.GetComponent<Renderer>().enabled = value;
+			zAxisCombined.GetComponent<Renderer>().enabled = value;
+		}	 
+	}
 	
 	void Update () {
 		/*
@@ -40,12 +49,6 @@ public class ForestObjects : MonoBehaviour {
 		*/
 	}
 	
-	void SetFade (GameObject axis, float alpha) {
-			if (axis == null) return;
-			MeshRenderer renderer = axis.GetComponent<MeshRenderer>();
-			renderer.material.SetFloat ("_Fade", alpha);
-	}
-	
 	/*
 	void SetAlpha (GameObject[] axis, float alpha) {
 		foreach (GameObject obj in axis) {
@@ -59,35 +62,25 @@ public class ForestObjects : MonoBehaviour {
 	}
 	*/
 	
-	public bool AxisEnabled {
-		get { return axisEnabled; }
-		set {
-			axisEnabled = value;
-			SetFade(xAxisCombined, value ? 0f : 0.4f);
-			SetFade(zAxisCombined, value ? 0f : 0.4f);
-			//FadeToAlpha(value ? 1 : 0.75f);
-		}
-	}
-	
-	public void SetXAxis (GameObject parent, GameObject[] axis, Material material) {
+	public void SetXAxis (GameObject parent, GameObject[] axis) {
 		xAxis = axis;
 		xAxisCombined = new GameObject();
 		xAxisCombined.name = "xAxis";
 		xAxisCombined.transform.parent = parent.transform;
 		xAxisCombined.AddComponent(typeof(MeshFilter));
 		MeshRenderer mr = (MeshRenderer)xAxisCombined.AddComponent(typeof(MeshRenderer));
-		mr.material = material;
+		mr.material = materialMap.getMaterial(randomiser);
 		CombineMeshesForAxis(xAxisCombined, xAxis);
 	}
 	
-	public void SetZAxis (GameObject parent, GameObject[] axis, Material material) {
+	public void SetZAxis (GameObject parent, GameObject[] axis) {
 		zAxis = axis;
 		zAxisCombined = new GameObject();
 		zAxisCombined.name = "zAxis";
 		zAxisCombined.transform.parent = parent.transform;
 		zAxisCombined.AddComponent(typeof(MeshFilter));
 		MeshRenderer mr = (MeshRenderer)zAxisCombined.AddComponent(typeof(MeshRenderer));
-		mr.material = material;
+		mr.material = materialMap.getMaterial(randomiser);
 		CombineMeshesForAxis(zAxisCombined, zAxis);
 	}
 	
@@ -98,7 +91,8 @@ public class ForestObjects : MonoBehaviour {
 			MeshFilter mesh = axis[i].GetComponent<MeshFilter>();
 			combine[i].mesh = mesh.sharedMesh;
 			combine[i].transform = mesh.transform.localToWorldMatrix;
-			mesh.gameObject.SetActive(false);
+			Destroy(mesh.gameObject);
+			//mesh.gameObject.SetActive(false);
 			i++;
 		}
 		parent.transform.GetComponent<MeshFilter>().mesh = new Mesh();
@@ -143,6 +137,7 @@ public class ForestObjects : MonoBehaviour {
 	}
 	
 	public void FlipObjects (bool value, string axisName) {
+		print ("flip objects:" + value + " axis:" + axisName);
 		GameObject[] axis = null;
 		if (axisName.Equals("z")) {
 			if (value == zFlipped) return;
@@ -163,6 +158,7 @@ public class ForestObjects : MonoBehaviour {
 		}
 	}
 	
+	/*
 	public void FadeToAlpha (float alpha) {
 		targetXAlpha = alpha;
 		targetZAlpha = alpha;

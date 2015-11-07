@@ -26,6 +26,10 @@ public class ForestArea : MonoBehaviour {
 		return rect.Contains(new Vector2(x, z));
 	}
 	
+	public bool Overlaps (Rect otherRect) {
+		return rect.Overlaps(otherRect);
+	}
+	
 	public void UpdateForPosition (int x, int z, int rotation) {
 		bool rotated = rotation == 90 || rotation == 270;
 		bool flipped = rotation == 180 || rotation == 270;
@@ -35,15 +39,31 @@ public class ForestArea : MonoBehaviour {
 	
 	public void UpdateForestObjects (int x, int z, bool rotated, bool flipped) {
 
+		if (forestObjects == null) return;
+		
 		foreach (GameObject go in forestObjects) { 
 			ForestObjects objects = (ForestObjects)go.GetComponent<ForestObjects>();
-			objects.AxisEnabled = !IsInFrontOf(x, z, rotated, flipped);
+			//bool isInFront = IsInFrontOf(x, z, rotated, flipped);
+			//objects.FadeAxis = isInFront;
 			//objects.FlipObjects( flipped, "x");
 			//objects.FlipObjects( flipped, "z");
 			
 			objects.EnableObjects(!rotated, "x");
 			objects.EnableObjects(rotated, "z");
 		}
+	}
+	
+	private bool rendererEnabled;
+	public bool RendererEnabled {
+		get { return rendererEnabled; }
+		set {
+			rendererEnabled = value;
+			foreach (GameObject go in forestObjects) { 
+				ForestObjects objects = (ForestObjects)go.GetComponent<ForestObjects>();
+				objects.EnableObjects(value, "x");
+				objects.EnableObjects(value, "z");
+			}
+		} 
 	}
 	
 	public bool IsInFrontOf (int x, int z, bool rotated, bool flipped) {
