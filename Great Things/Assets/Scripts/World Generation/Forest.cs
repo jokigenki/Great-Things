@@ -1,5 +1,8 @@
 ﻿using UnityEngine;
+using System;
 using System.Collections;
+using System.Collections.Generic;
+using UnityEditor;
 
 public class Forest : MonoBehaviour
 {
@@ -9,6 +12,9 @@ public class Forest : MonoBehaviour
 	public ColourMaterialMap groundMaterialMap;
 	public ColourMaterialMap waterMaterialMap;
 	public ColourMaterialMap pathMaterialMap;
+	public List<Color> poolLightColours;
+	public List<Color> forestLightColours;
+	public GameObject blobShadowPrefab;
 	
 	public Texture2D pathMap;
 	public GameObject player;
@@ -16,6 +22,7 @@ public class Forest : MonoBehaviour
 	public GameObject floorPrefab;
 	public int hilliness = 2;
 	public int drawDistance = 10;
+	public float pathInsetAmount = 0.05f;
 	
 	public GameObject forestPrefab;
 	
@@ -24,11 +31,13 @@ public class Forest : MonoBehaviour
 
 	GameObject forest;
 	GameObject paths;
-	
-	ArrayList forestAreas;
+	Vector3 pathInset;
+	List<GameObject> forestAreas;
 	SeededRandomiser randomiser;
 	Map map;
 	Vector3 lastUpdatePosition;
+	
+	Queue<Func<IEnumerator>> generationQueue = new Queue<Func<IEnumerator>>();
 	
 	public static readonly Color BLANK_PIXEL = new Color (0, 0, 0f, 1f);
 	public static readonly Color PATH_PIXEL = new Color (235f / 255f, 137f / 255f, 49f / 255f, 1f);
@@ -41,12 +50,28 @@ public class Forest : MonoBehaviour
 	void Start ()
 	{
 		randomiser = new SeededRandomiser (12345678);
-	
+		pathInset = new Vector3(0, pathInsetAmount, 0);
+		
 		CreateForestParentObjects();
-		CreateMap ();
-		CreatePlayer (map);
-		CreatePathQuads(map);
-		StartCoroutine(CreateForestAreas (map));
+		CreateMap();
+		CreatePlayer(map);
+		
+		StartCoroutine(StartGeneratorQueue());
+	}
+	
+	IEnumerator StartGeneratorQueue () {
+		generationQueue.Enqueue(()=>CreatePath(map));
+		generationQueue.Enqueue(()=>CreateForestAreas(map));
+		generationQueue.Enqueue(CompleteSetup);
+		
+		while(true)
+		{
+			if(generationQueue.Count > 0)
+			{
+				yield return StartCoroutine(generationQueue.Dequeue()());
+			}
+			else yield return null;
+		}
 	}
 	
 	// Update is called once per frame
@@ -56,10 +81,6 @@ public class Forest : MonoBehaviour
 	}
 	
 	void CreateForestParentObjects () {
-		paths = new GameObject ();
-		paths.name = "paths";
-		paths.transform.parent = transform;
-		
 		forest = new GameObject ();
 		forest.name = "forest";
 		forest.transform.parent = transform;
@@ -68,7 +89,7 @@ public class Forest : MonoBehaviour
 		pos.y = 0.5f;
 		forest.transform.localPosition = pos;		
 		
-		forestAreas = new ArrayList ();
+		forestAreas = new List<GameObject>();
 	}
 	
 	void CreateMap () {
@@ -83,15 +104,16 @@ public class Forest : MonoBehaviour
 		MapUtils.SetHeightsForMap(map, randomiser);
 	}
 	
-	// Creates the paths for the map. Each square is a separate object.
-	// TODO: if we merge these, do we get better performance?
-	// TODO: Can we add more geometry? 
-	// TODO: paths need to have better edges, so they are more clearly marked as paths, and so they can merge into the forest more
-	void CreatePathQuads (Map map)
+	// Creates the paths for the map. Each square is a separate object, which it then merged into a single object.
+	IEnumerator CreatePath (Map map)
 	{
 		Vector3[] vertices = GetVerticesForFlatQuad();
 		Vector3 position = Vector3.zero;
 		
+		Material material = pathMaterialMap.getMaterial(randomiser);
+		Material underMaterial = groundMaterialMap.getMaterial(randomiser);
+		List<GameObject> quads = new List<GameObject>();
+		List<GameObject> underQuads = new List<GameObject>();
 		int depth = map.mapDepth;
 		int width = map.mapWidth;
 		for (int z = 0; z < depth; z++) {
@@ -107,14 +129,56 @@ public class Forest : MonoBehaviour
 				position.z = z;
 				
 				if (location == null) continue;
-				for (int i = 0; i < 4; i++) {
-					GameObject quad = MeshUtils.CreatePlane ("path", vertices, pathMaterialMap.getMaterial(randomiser), false);
-					quad.transform.localPosition = position;
-					quad.transform.parent = paths.transform;
-					location.quad = quad;
-				}
+				
+				BuildPathQuad(quads, position, vertices, material);
+				int[] vertexIndicesIn = new int[] {0, 2, 3, 1, 0};
+				int[] vertexIndicesOut = new int[] {0, 1, 3, 2, 0};
+				int[] offsetsIn = new int[] {1, 0, 0, -1, -1, 0, 0, 1};
+				int[] offsetsOut = new int[] {0, 1, -1, 0, 0, -1, 1, 0};
+				BuildVerticalQuads (underQuads, position, vertices, underMaterial, vertexIndicesIn, offsetsIn, false);
+				BuildVerticalQuads (underQuads, position, vertices, underMaterial, vertexIndicesOut, offsetsOut, true);
 			}
 		}
+		
+		GameObject paths = MeshUtils.CombineQuads("paths", quads.ToArray(), material, true);
+		paths.transform.parent = transform;
+		paths.transform.position = paths.transform.position - pathInset;
+		paths.AddComponent(typeof(MeshCollider));	
+		
+		GameObject underPaths = MeshUtils.CombineQuads("underPaths", underQuads.ToArray(), underMaterial, true);
+		underPaths.transform.parent = transform;
+		
+		yield return null;
+	}
+	
+	public void BuildPathQuad (List<GameObject> target, Vector3 position, Vector3[] vertices, Material material) {
+		GameObject quad = MeshUtils.CreatePlane ("path", vertices, material, false);	
+		//GameObject subdividedQuad = MeshUtils.CombineQuads("path", MeshUtils.SubdivideQuad("path", quad, material, false), material);
+		quad.transform.localPosition = position;
+		target.Add(quad);
+	}
+	
+	public void BuildVerticalQuads (List<GameObject> target, Vector3 position, Vector3[] vertexBase, Material material, int[] vertexIndices, int[] offsets, bool alwaysOffset) {
+		for (int i = 0; i < vertexIndices.Length - 1; i++) {
+			GameObject quad = MeshUtils.CreatePlane ("pathN", GetVerticesForVerticalQuad(vertexBase, vertexIndices[i], vertexIndices[i + 1]), material, false);
+			if (alwaysOffset || ShouldOffsetUnderGroundQuad(position, offsets[i * 2], offsets[(i * 2) + 1])) {
+				quad.transform.localPosition = position - pathInset;
+			} else {
+				quad.transform.localPosition = position;
+			}
+			target.Add(quad);
+		}
+	}
+	
+	public bool ShouldOffsetUnderGroundQuad(Vector3 position, int offsetX, int offsetZ) {
+		Vector3 checkPos = new Vector3(position.x + offsetX, position.y, position.z + offsetZ);
+		return LocationIsPath(checkPos);
+	}
+	
+	public bool LocationIsPath (Vector3 position) {
+		MapLocation location = map.GetMapLocationForPosition(position);
+		if (location == null) return false;
+		return !location.tag.Equals("forest");
 	}
 	
 	// Returns a set of vertices for a basic quad
@@ -128,22 +192,19 @@ public class Forest : MonoBehaviour
 		return vertices;
 	}
 	
+	public Vector3[] GetVerticesForVerticalQuad (Vector3[] vertexBase, int first, int second) {
+		Vector3[] vertices = new Vector3[4];
+		vertices[2] = vertexBase[first];
+		vertices[3] = vertexBase[second];
+		vertices[0] = new Vector3(vertexBase[first].x, -2, vertexBase[first].z);
+		vertices[1] = new Vector3(vertexBase[second].x, -2, vertexBase[second].z);
+					
+		return vertices;
+	}
+	
 	// TODO: Given a colour should return the correct material
 	Material GetMaterialForColour (Color colour) {
 		return null;
-	}
-	
-	// If the given area has been created and stored in forestAreas, does nothing
-	// Iterates the groundMaterialMap, and if it finds the given colour, returns true.
-	// if the given colour is not in the groundMaterialMap, it will return false
-	bool ShouldCreateAForestArea (Color pixel, int x, int z) {
-		
-		if (InForestArea (forestAreas, x, z, true)) return false;
-		foreach (Color color in groundMaterialMap.colors) {
-			if (pixel.Equals(color)) return true;
-		}
-		
-		return false;
 	}
 	
 	// distance is in map pixels
@@ -155,43 +216,115 @@ public class Forest : MonoBehaviour
 			for (int x = 0; x < map.mapWidth; x++) {
 				Color pixel = map.GetPixelForLocation (x, z);
 				Color currentPixel = pixel;
-				if (ShouldCreateAForestArea(pixel, x, z)) {
-					//print ("create forest area:" + x + ", " + z);
-					GameObject forestGO = new GameObject ();
-					forestGO.name = "forestArea";
-					forestGO.transform.parent = forest.transform;
-					ForestArea forestArea = forestGO.AddComponent <ForestArea>() as ForestArea;
-					int areaWidth = 0;
-					int areaHeight = 0;
-					while (pixel.Equals(currentPixel)) {
-						areaHeight++;
-						pixel = map.GetPixelForLocation (x, z + areaHeight);
-					}
-					pixel = map.GetPixelForLocation (x, z);
-					while (pixel.Equals(currentPixel)) {
-						areaWidth++;
-						pixel = map.GetPixelForLocation (x + areaWidth, z);
-					}
-					
-					forestArea.rect = new Rect(x, z, areaWidth, areaHeight);
-					CreateForestAreaObjects(forestArea, x, z, areaWidth, areaHeight);
-					forestAreas.Add (forestGO);
-					
-					forestArea.RendererEnabled = false;
+				if (ShouldCreateAForestArea(pixel, x, z, groundMaterialMap)) {
+					CreateForestArea(pixel, currentPixel, x, z);
+					yield return null;
+				} else if (ShouldCreateAForestArea(pixel, x, z, waterMaterialMap)) {
+					CreatePoolArea(pixel, currentPixel, x, z);
 					yield return null;
 				}
 			}
 		}
+	}
+	
+	// If the given area has been created and stored in forestAreas, does nothing
+	// Iterates the groundMaterialMap, and if it finds the given colour, returns true.
+	// if the given colour is not in the groundMaterialMap, it will return false
+	bool ShouldCreateAForestArea (Color pixel, int x, int z, ColourMaterialMap matMap) {
 		
+		if (InForestArea (forestAreas, x, z, true)) return false;
+		foreach (Color color in matMap.colors) {
+			if (pixel.Equals(color)) return true;
+		}
+		
+		return false;
+	}
+	
+	IEnumerator CompleteSetup() {
 		ready = true;
 		
 		Renderer renderer = player.GetComponent<Renderer>();
 		renderer.enabled = true;
+
+		PrefabUtils.GenerateNestedPrefab(gameObject, "Meshes", "Prefabs");
+		
+		yield return null;
+	}
+	
+	public void CreateForestArea (Color pixel, Color currentPixel, int x, int z) {
+		GameObject forestGO = new GameObject ();
+		forestGO.name = "forestArea";
+		forestGO.transform.parent = forest.transform;
+		ForestArea forestArea = forestGO.AddComponent <ForestArea>() as ForestArea;
+		int areaWidth = 0;
+		forestArea.type = "forest";
+		int areaHeight = 0;
+		while (pixel.Equals(currentPixel)) {
+			areaHeight++;
+			pixel = map.GetPixelForLocation (x, z + areaHeight);
+		}
+		pixel = map.GetPixelForLocation (x, z);
+		while (pixel.Equals(currentPixel)) {
+			areaWidth++;
+			pixel = map.GetPixelForLocation (x + areaWidth, z);
+		}
+		
+		forestArea.rect = new Rect(x, z, areaWidth, areaHeight);
+		CreateForestAreaObjects(forestArea, x, z, areaWidth, areaHeight);
+		forestAreas.Add (forestGO);
+		
+		forestArea.RendererEnabled = false;
+		
+		int index = randomiser.GetRandomIntFromRange(0, forestLightColours.Count - 1);
+		Color colour = forestLightColours[index];
+		CreateLightForArea(forestGO, x, z, (float)areaWidth, (float)areaHeight, colour, 4);
+	}
+	
+	public void CreatePoolArea (Color pixel, Color currentPixel, int x, int z) {
+		GameObject poolGO = new GameObject ();
+		poolGO.name = "poolArea";
+		poolGO.transform.parent = forest.transform;
+		ForestArea forestArea = poolGO.AddComponent <ForestArea>() as ForestArea;
+		forestArea.type = "pool";
+		int areaWidth = 0;
+		int areaHeight = 0;
+		while (pixel.Equals(currentPixel)) {
+			areaHeight++;
+			pixel = map.GetPixelForLocation (x, z + areaHeight);
+		}
+		pixel = map.GetPixelForLocation (x, z);
+		while (pixel.Equals(currentPixel)) {
+			areaWidth++;
+			pixel = map.GetPixelForLocation (x + areaWidth, z);
+		}
+	
+		forestArea.rect = new Rect(x, z, areaWidth, areaHeight);
+		forestArea.Ground = CreateWater (x - 0.5f, z - 0.5f, areaWidth, areaHeight, map.locations, waterMaterialMap.getMaterial(randomiser));
+		MeshUtils.JitterMeshOnY(forestArea.Ground, -10, 10, 0.01f, -0.1f, 0.1f);
+		forestAreas.Add (poolGO);
+		
+		forestArea.RendererEnabled = false;
+		
+		int index = randomiser.GetRandomIntFromRange(0, poolLightColours.Count - 1);
+		Color colour = poolLightColours[index];
+		CreateLightForArea(poolGO, x, z, (float)areaWidth, (float)areaHeight, colour, 8);
+	}
+	
+	void CreateLightForArea (GameObject parent, int x, int z, float w, float d, Color colour, float intensity) {
+		GameObject light = new GameObject("Area Light");
+		Light lightComp = light.AddComponent<Light>();
+		lightComp.color = colour;
+		lightComp.intensity = intensity;
+		float y = Mathf.Max(w, d) / 2;
+		lightComp.range = y * 2;
+		light.transform.parent = parent.transform;
+		light.transform.position = new Vector3(x + w / 2, y, z + d / 2);
 	}
 	
 	// Creates the trees, bushes, rocks etc. for the given forestArea
 	void CreateForestAreaObjects (ForestArea forestArea, int x, int z, int areaWidth, int areaHeight) {
 		forestArea.Ground = CreateGround (x - 0.5f, z - 0.5f, areaWidth, areaHeight, map.locations, groundMaterialMap.getMaterial(randomiser));
+		forestArea.Ground.AddComponent(typeof(MeshCollider));	
 		forestArea.AddForestObjects(CreateForestObjects ("trees", forestArea.rect, 4f, 0.5f, map.locations, 1.1f, randomiser, treeMaterialMap));
 		forestArea.AddForestObjects(CreateForestObjects ("bushes", forestArea.rect, 0.25f, 0.9f, map.locations, 0.4f, randomiser, bushMaterialMap));
 		forestArea.AddForestObjects(CreateForestObjects ("rocks", forestArea.rect, 0.2f, 1.5f, map.locations, 0.2f, randomiser, rockMaterialMap));
@@ -199,7 +332,7 @@ public class Forest : MonoBehaviour
 
 	// Is the given x, z value inside the existing forestAreas
 	// Can be used to switch on the renderer of the forestArea if it is disabled
-	bool InForestArea (ArrayList forestAreas, int x, int z, bool enableRendererIfDisabled)
+	bool InForestArea (List<GameObject> forestAreas, int x, int z, bool enableRendererIfDisabled)
 	{
 		foreach (GameObject area in forestAreas) {
 			ForestArea maker = area.GetComponent<ForestArea> ();
@@ -244,75 +377,81 @@ public class Forest : MonoBehaviour
 				}
 				
 				GameObject quad = MeshUtils.CreatePlane("ground", vertices, material, false);
+				//GameObject dividedQuad = MeshUtils.CombineQuads("groundSection", MeshUtils.SubdivideQuad("ground", quad, material, false), material);
 				quadPos.x = x + qx + 0.5f;
 				quadPos.z = z + qz + 0.5f;
 				quad.transform.localPosition = quadPos;
 				
-				location.quad = quad;
 				quads[j++] = quad;
 			}
 		}
 		
-		return CreateCombinedGroundObject(quads, material);
+		GameObject ground = MeshUtils.CombineQuads("ground_" + x + "_" + z, quads, material);
+		MeshRenderer mr = ground.GetComponent<MeshRenderer>() as MeshRenderer;
+		mr.receiveShadows = true;
+		return ground;
 	}
 	
-	// Takes an array of ground quads and turns them into a single mesh
-	public GameObject CreateCombinedGroundObject (GameObject[] quads, Material material) {
-		GameObject ground = new GameObject();
-		ground.AddComponent(typeof(MeshFilter));
-		MeshRenderer mr = (MeshRenderer)ground.AddComponent(typeof(MeshRenderer));
-		mr.material = material;
-		
-		CombineInstance[] combine = new CombineInstance[quads.Length];
-		int k = 0;
-		while (k < quads.Length) {
-			GameObject quad = quads[k];
-			quad.transform.parent = ground.transform;
-			MeshFilter mesh = quad.GetComponent<MeshFilter>();
-			combine[k].mesh = mesh.sharedMesh;
-			combine[k].transform = mesh.transform.localToWorldMatrix;
-			Destroy(mesh.gameObject);
-			k++;
+	// Create a ground object for a forestArea, by creating a quad for each pixel in the map
+	// The y position of each corner in the quad is taken from the pregenerated locations map
+	// Once these are created, they are merged into a single object
+	public GameObject CreateWater (float x, float z, float width, float depth, MapLocation[,] locations, Material material) {
+		Vector3[] vertices = GetVerticesForFlatQuad();
+		Vector3 quadPos = Vector3.zero;
+		quadPos.y = 0.5f;
+		GameObject[] quads = new GameObject[Mathf.RoundToInt(depth * width)];
+		int j = 0;
+		float lowestY = int.MaxValue;
+		for (int qz = 0; qz < depth; qz++) {
+			for (int qx = 0; qx < width; qx++) {
+				
+				int hx = Mathf.RoundToInt(x + 0.5f) + qx;
+				int hz = Mathf.RoundToInt(z + 0.5f) + qz;
+				MapLocation location = locations[hx, hz];
+				for (int i = 0; i < 4; i++) {
+					if (lowestY > vertices[i].y) lowestY = location.corners[i];
+				}
+			}
 		}
-		ground.transform.GetComponent<MeshFilter>().mesh = new Mesh();
-		ground.transform.GetComponent<MeshFilter>().mesh.CombineMeshes(combine);
-		ground.transform.gameObject.SetActive(true);
 		
-		return ground;
+		for (int qz = 0; qz < depth; qz++) {
+			for (int qx = 0; qx < width; qx++) {
+				GameObject quad = MeshUtils.CreatePlane("ground", vertices, material, false);
+				//GameObject dividedQuad = MeshUtils.CombineQuads("groundSection", MeshUtils.SubdivideQuad("ground", quad, material, false), material);
+				quadPos.x = x + qx + 0.5f;
+				quadPos.y = lowestY - 0.01f;
+				quadPos.z = z + qz + 0.5f;
+				quad.transform.localPosition = quadPos;
+				
+				quads[j++] = quad;
+			}
+		}
+		
+		return MeshUtils.CombineQuads("ground_" + x + "_" + z, quads, material);
 	}
 	
 	// Creates forest objects inside the given rectangle
 	public GameObject CreateForestObjects (string name, Rect rect, float scale, float density, MapLocation[,] locations, float minimumDistanceBetween, SeededRandomiser randomiser, ColourMaterialMap materialMap) {
 		
-		GameObject go = new GameObject();
-		go.name = name;
-		
-		Vector3 holderPos = go.transform.localPosition;
+		Vector3 holderPos = Vector3.zero;
 		holderPos.x = rect.x;
-		holderPos.y = 0.5f;
+		holderPos.y = 0f;
 		holderPos.z = rect.y;
-		go.transform.localPosition = holderPos;
-		
-		ForestObjects forestObjects = (ForestObjects)go.AddComponent(typeof(ForestObjects));
-		forestObjects.materialMap = materialMap;
-		forestObjects.randomiser = randomiser;
 		int totalQuads = Mathf.RoundToInt(rect.width * rect.height * density);
 		
-		ArrayList xAxisArray = new ArrayList();
-		ArrayList zAxisArray = new ArrayList();
+		Material material = materialMap.getMaterial(randomiser);
+		List<GameObject> objects = new List<GameObject>();
 		int timeoutMax = 100;
 		int timeout = timeoutMax;
 		int objectsMade = 0;
 		minimumDistanceBetween *= minimumDistanceBetween;
 		while (objectsMade < totalQuads && timeout > 0) {
-			float xPosition = randomiser.GetRandomFromRange(0, rect.xMax - rect.xMin - 0.5f);
-			float zPosition = randomiser.GetRandomFromRange(0, rect.yMax - rect.yMin - 0.5f);
-			int locationX = Mathf.FloorToInt(rect.x + xPosition);
-			int locationZ = Mathf.FloorToInt(rect.y + zPosition);
-			float yPosition = (scale / 2) + GetLowestYForLocation(locations[locationX, locationZ]);
-			Vector3 pos = new Vector3(xPosition, yPosition, zPosition);
-			if (IsValidPosition(pos, xAxisArray, objectsMade, minimumDistanceBetween)) {	
-				CreateDoubleSidedForestObjectQuad(go, materialMap, scale, pos, xAxisArray, zAxisArray);
+			float xPosition = randomiser.GetRandomFromRange(0.5f, rect.xMax - rect.xMin - 1f);
+			float zPosition = randomiser.GetRandomFromRange(0.5f, rect.yMax - rect.yMin - 1f);
+			Vector3 pos = new Vector3(xPosition, 0, zPosition);
+			pos.y = (scale / 2) + GetYForPosition(new Vector3(holderPos.x + xPosition, 0, holderPos.z + zPosition)) - 0.01f;
+			if (IsValidPosition(pos, objects, objectsMade, minimumDistanceBetween)) {	
+				CreateDoubleSidedForestObjectQuad(material, scale, pos, objects);
 				timeout = timeoutMax;
 				objectsMade++;
 			} else {
@@ -320,36 +459,34 @@ public class Forest : MonoBehaviour
 			}
 		}
 		
-		forestObjects.SetXAxis(go, ListToArray(xAxisArray));
-		forestObjects.SetZAxis(go, ListToArray(zAxisArray));
+		GameObject go = MeshUtils.CombineQuads(name, objects.ToArray(), material);
+		go.name = name;
+		go.transform.localPosition = holderPos;
 		
 		return go;
 	}
 	
 	// Creates 4 quads, each rotated by 90º from 45º
 	// Each quad is assigned a random material from the given MaterialMap
-	void CreateDoubleSidedForestObjectQuad (GameObject parent, ColourMaterialMap materialMap, float scale, Vector3 pos, ArrayList xAxisArray, ArrayList zAxisArray) {
+	void CreateDoubleSidedForestObjectQuad (Material material, float scale, Vector3 pos, List<GameObject> objects) {
 		for (int rotation = 45; rotation < 360; rotation+=90) {
-			GameObject plane = CreateForestObjectQuad(materialMap.getMaterial(randomiser));
-			plane.transform.parent = parent.transform;
+			GameObject plane = CreateForestObjectQuad(material);
+			//plane.transform.parent = parent.transform;
 			plane.transform.localScale = new Vector3(scale, scale, scale);
 			plane.transform.localPosition = pos;
 			plane.transform.localEulerAngles = new Vector3(0, rotation, 0);
-			
-			ArrayList axisArray = rotation == 45 || rotation == 225 ? xAxisArray : zAxisArray;
-			axisArray.Add(plane);
+			objects.Add(plane);
 		}
 	}
 	
-	// Turns an ArrayList into an Array of GameObjects
-	GameObject[] ListToArray (ArrayList list) {
-		GameObject[] arr = new GameObject[list.Count];
-		int i = 0;
-		foreach (GameObject obj in list) {
-			arr[i++] = obj;
-		}
+	GameObject CreateBlobShadowCaster (GameObject parent, Vector3 pos) {
+		GameObject blob = Instantiate(blobShadowPrefab) as GameObject;
+		blob.transform.parent = parent.transform;
+		Vector3 tin = new Vector3(0, 0.25f, 0);
+		blob.transform.localPosition = pos + tin;
+		blob.transform.localEulerAngles = new Vector3(90, 0, 0);
 		
-		return arr;
+		return blob;
 	}
 	
 	// Creates a vertically orientated quad
@@ -373,9 +510,9 @@ public class Forest : MonoBehaviour
 	}
 	
 	// Given a position, returns whether it is the minimum distance away from each object in the existingObjects list or not
-	bool IsValidPosition (Vector3 position, ArrayList existingObjects, int max, float minDist) {
+	bool IsValidPosition (Vector3 position, List<GameObject> existingObjects, int max, float minDist) {
 		for (int i = 0; i < max; i++) {
-			GameObject existing = (GameObject)existingObjects[i];
+			GameObject existing = existingObjects[i];
 			Vector3 pos = existing.transform.localPosition;
 			float xDist = (pos.x - position.x);
 			float zDist = (pos.z - position.z);
@@ -413,11 +550,13 @@ public class Forest : MonoBehaviour
 	
 	// Returns the map location that is at current position plus the move at the current rotation
 	public MapLocation GetTransitLocationForMove (Vector3 position, Vector3 move, bool rotated) {
+		if (map == null) return null; 
 		return rotated ? map.GetZLocation (position, move) : map.GetXLocation (position, move);
 	}
 	
 	// Given a position, returns the y position at that map location
-	public float GetYForPosition (Vector3 position, bool rotated) {
-		return map.GetPositionHeight(position.x, position.z, rotated);
+	public float GetYForPosition (Vector3 position) {
+		if (map == null) return 0f;
+		return map.GetPositionHeight(position.x, position.z);
 	}
 }

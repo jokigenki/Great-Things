@@ -5,7 +5,8 @@ public class SmoothCameraTracker : MonoBehaviour {
 
 	public GameObject target;
 	public GameObject followCamera;
-	public float easeSpeed = 0.0016f;
+	public float easeSpeed = 0.005f;
+	public float yOffset = 0.5f;
 	Vector3 targetPosition;
 	
 	float targetRotation;
@@ -36,11 +37,12 @@ public class SmoothCameraTracker : MonoBehaviour {
 		float z = distance * Mathf.Cos(playerRotation * Mathf.PI / 180);
 		
 		targetPosition.x = targetTransform.position.x - x;
+		targetPosition.y = targetTransform.position.y + yOffset;
 		targetPosition.z = targetTransform.position.z - z;
 		targetRotation = playerRotation;
 		
 		if (!firstPositionSet) {
-			pastCameraPosition = new Vector3(targetPosition.x, transform.position.y, targetPosition.z);
+			pastCameraPosition = new Vector3(targetPosition.x, targetPosition.y, targetPosition.z);
 			//pastCameraRotation = targetRotation;
 			//pastTargetRotation = targetRotation;
 			pastTargetPosition = targetPosition;
@@ -51,7 +53,7 @@ public class SmoothCameraTracker : MonoBehaviour {
 
 		// move camera //
 		Vector3 lerped = SuperSmoothLerp( pastCameraPosition, pastTargetPosition, targetPosition, Time.time, easeSpeed );
-		lerped.y = pastCameraPosition.y;
+		//lerped.y = pastCameraPosition.y;
 		pastCameraPosition = camTransform.position;
 		pastTargetPosition = targetPosition;
 		followCamera.transform.position = lerped;

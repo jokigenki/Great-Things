@@ -10,7 +10,6 @@ public class MapLocation {
 	public Color colour;
 	public float[] corners;
 	public string tag;
-	public GameObject quad;
 	
 	public MapLocation (int x, int y, int z, string tag) {
 		this.x = x;

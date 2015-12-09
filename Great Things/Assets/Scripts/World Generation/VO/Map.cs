@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public class Map {
 
@@ -7,8 +8,8 @@ public class Map {
 	public int hilliness;
 	public int mapWidth;
 	public int mapDepth;
-	public ArrayList entrances;
-	public ArrayList exits;
+	public List<MapLocation> entrances;
+	public List<MapLocation> exits;
 	public MapLocation[,] locations;
 	public Color[] pixels;
 	public MapTag blankTag;
@@ -21,8 +22,8 @@ public class Map {
 		this.tags = tags;
 		mapWidth = texture.width;
 		mapDepth = texture.height;
-		entrances = new ArrayList ();
-		exits = new ArrayList();
+		entrances = new List<MapLocation>();
+		exits = new List<MapLocation>();
 		locations = new MapLocation[mapWidth, mapDepth];
 		pixels = texture.GetPixels (0, 0, mapWidth, mapDepth);
 		
@@ -109,12 +110,13 @@ public class Map {
 		locations [x, z] = centre;
 	}
 	
-	public float GetPositionHeight (float x, float z, bool rotated) {
-		MapLocation location = GetMapLocationForPosition (Mathf.RoundToInt (x), Mathf.RoundToInt (z));
+	public float GetPositionHeight (float x, float z) {
 		
-		RaycastHit[] hits = Physics.RaycastAll(new Vector3(x, location.y + 1f, z), new Vector3(0, -1f, 0), 2f);
-		if (hits.Length == 0) return location.y;
+		Vector3 start = new Vector3(x, 10f, z);
+		RaycastHit[] hits = Physics.RaycastAll(start, Vector3.down, 20f);
+		if (hits.Length == 0) return GetMapLocationForPosition (Mathf.RoundToInt (x), Mathf.RoundToInt (z)).y;
 		
+		//Debug.DrawLine(start, hits[0].point, Color.cyan, 2f);
 		return hits[0].point.y;
 	}
 	

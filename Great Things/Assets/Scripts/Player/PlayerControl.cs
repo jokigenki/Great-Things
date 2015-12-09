@@ -27,9 +27,6 @@ public class PlayerControl : MonoBehaviour {
 		animator = gameObject.GetComponent<Animator>();
 		yRotation = transform.localEulerAngles.y;
 		rotateReleased = true;
-		
-		print (365 % 360);
-		print (-6 % 360);
 	}
 	
 	// Update is called once per frame
@@ -97,7 +94,7 @@ public class PlayerControl : MonoBehaviour {
 		
 		if (paths != null) {
 			Vector3 pos = gameObject.transform.localPosition;
-			pos.y = paths.GetYForPosition(pos, IsRotated(yRotation));
+			pos.y = paths.GetYForPosition(pos);
 			gameObject.transform.localPosition = pos;
 		}
 		

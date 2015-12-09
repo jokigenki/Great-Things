@@ -1,11 +1,24 @@
 ﻿using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public class ForestArea : MonoBehaviour {
 
 	public Rect rect;
+	public string type;
 	GameObject ground;
-	ArrayList forestObjects;
+	List<GameObject> forestObjects;
+	int jitterCount;
+	
+	void Update () {
+		if (type != null && type.Equals("pool") && ground != null) {
+			jitterCount++;
+			if (jitterCount > 5) {
+				MeshUtils.JitterMeshOnY(ground, -10, 10, 0.001f, -0.1f, 0.1f);
+				jitterCount = 0;
+			}
+		}
+	}
 	
 	public GameObject Ground {
 		get { return ground; }
@@ -17,7 +30,7 @@ public class ForestArea : MonoBehaviour {
 	}
 	
 	public void AddForestObjects (GameObject objects) {
-		if (forestObjects == null) forestObjects = new ArrayList();
+		if (forestObjects == null) forestObjects = new List<GameObject>();
 		forestObjects.Add(objects);
 		objects.transform.parent = transform;
 	}
@@ -30,39 +43,11 @@ public class ForestArea : MonoBehaviour {
 		return rect.Overlaps(otherRect);
 	}
 	
-	public void UpdateForPosition (int x, int z, int rotation) {
-		bool rotated = rotation == 90 || rotation == 270;
-		bool flipped = rotation == 180 || rotation == 270;
-		
-		UpdateForestObjects(x, z, rotated, flipped);
-	}
-	
-	public void UpdateForestObjects (int x, int z, bool rotated, bool flipped) {
-
-		if (forestObjects == null) return;
-		
-		foreach (GameObject go in forestObjects) { 
-			ForestObjects objects = (ForestObjects)go.GetComponent<ForestObjects>();
-			//bool isInFront = IsInFrontOf(x, z, rotated, flipped);
-			//objects.FadeAxis = isInFront;
-			//objects.FlipObjects( flipped, "x");
-			//objects.FlipObjects( flipped, "z");
-			
-			objects.EnableObjects(!rotated, "x");
-			objects.EnableObjects(rotated, "z");
-		}
-	}
-	
 	private bool rendererEnabled;
 	public bool RendererEnabled {
 		get { return rendererEnabled; }
 		set {
 			rendererEnabled = value;
-			foreach (GameObject go in forestObjects) { 
-				ForestObjects objects = (ForestObjects)go.GetComponent<ForestObjects>();
-				objects.EnableObjects(value, "x");
-				objects.EnableObjects(value, "z");
-			}
 		} 
 	}
 	

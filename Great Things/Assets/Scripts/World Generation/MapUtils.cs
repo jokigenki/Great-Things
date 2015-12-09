@@ -25,11 +25,36 @@ public class MapUtils {
 			int x = Mathf.RoundToInt (randomiser.GetRandomFromRange (0, mapWidth));
 			int z = Mathf.RoundToInt (randomiser.GetRandomFromRange (0, mapDepth));
 			
-			float value = (randomiser.GetRandom () * 0.5f) - 0.25f;
-			ChangeHeightForPosition (x, z, mapWidth, mapDepth, locations, value, true);
+			if (IsNextToWater(locations, x, z)) {
+				float value = (randomiser.GetRandom () * 0.1f) - 0.05f;
+				ChangeHeightForPosition (x, z, mapWidth, mapDepth, locations, value, true);
+				c--;
+			} else {
+				float value = (randomiser.GetRandom () * 0.5f) - 0.25f;
+				ChangeHeightForPosition (x, z, mapWidth, mapDepth, locations, value, true);
+			}
 		}
 		
 		SetCornerHeights(map);
+	}
+	
+	public static bool IsNextToWater (MapLocation[,] locations, int x, int z) {
+		return IsWater(locations, x+1, z) ||
+			IsWater(locations, x, z+1) ||
+				IsWater(locations, x-1, z) ||
+				IsWater(locations, x, z-1) ||
+				IsWater(locations, x+1, z+1) ||
+				IsWater(locations, x-1, z+1) ||
+				IsWater(locations, x+1, z-1) ||
+				IsWater(locations, x-1, z-1);
+	}
+	
+	public static bool IsWater (MapLocation[,] locations, int x, int z) {
+		if (x < 0 || x >= locations.GetLength(0)) return false;
+		if (z < 0 || z >= locations.GetLength(1)) return false;
+		
+		bool nextToPool = locations[x, z].tag.Equals("pool");
+		return nextToPool;
 	}
 	
 	// changes the height for the location at xz
