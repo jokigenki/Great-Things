@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 
+[System.Serializable]
 public class Map {
 
 	public Texture2D texture;
@@ -9,8 +10,7 @@ public class Map {
 	public int mapWidth;
 	public int mapDepth;
 	public List<MapLocation> entrances;
-	public List<MapLocation> exits;
-	public MapLocation[,] locations;
+	public List<MapLocation> locations;
 	public Color[] pixels;
 	public MapTag blankTag;
 	public MapTag[] tags;
@@ -23,8 +23,7 @@ public class Map {
 		mapWidth = texture.width;
 		mapDepth = texture.height;
 		entrances = new List<MapLocation>();
-		exits = new List<MapLocation>();
-		locations = new MapLocation[mapWidth, mapDepth];
+		locations = new List<MapLocation>();
 		pixels = texture.GetPixels (0, 0, mapWidth, mapDepth);
 		
 		for (int z = 0; z < mapDepth; z++) {
@@ -65,9 +64,9 @@ public class Map {
 	
 	public MapLocation GetMapLocationForPosition (int x, int z)
 	{
-		if (!MapUtils.IsMapPositionValid(x, z, mapWidth, mapDepth)) return null;
-		MapLocation location = locations [x, z];
-		return location;
+		 if (x < 0 || z < 0 || x > mapWidth || z > mapDepth) return null;
+		int index = z * mapWidth + x;
+		return locations[index];
 	}
 	
 	public MapLocation GetXLocation (Vector3 position, Vector3 move) {
@@ -92,22 +91,22 @@ public class Map {
 		if (!MapUtils.IsMapPositionValid(x, z, mapWidth, mapDepth)) return null;
 		
 		MapLocation location = new MapLocation (x, 0, z, tag);
-		locations[x, z] = location;
+		PutLocation(x, z, location);
 		if (tag.Equals("entrance"))
 			entrances.Add (location);
 		location.colour = color;	
 		return location;
 	}
 	
+	void PutLocation (int x, int z, MapLocation item) {
+		int index = z * mapWidth + x;
+		locations.Insert(index, item);
+	}
+	
 	public void CreateMapLocation (int x, int z)
 	{
 		MapLocation centre = CreateLocation (x, z);
-		centre.exits [0] = CreateLocation (x, z + 1); // north
-		centre.exits [1] = CreateLocation (x + 1, z); // east
-		centre.exits [2] = CreateLocation (x, z - 1); // south
-		centre.exits [3] = CreateLocation (x - 1, z); // west
-		
-		locations [x, z] = centre;
+		PutLocation(x, z, centre);
 	}
 	
 	public float GetPositionHeight (float x, float z) {

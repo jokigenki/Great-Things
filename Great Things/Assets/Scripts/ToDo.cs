@@ -4,11 +4,11 @@ using System.Collections;
 public class ToDo : MonoBehaviour {
 
 	// TOP PRIORITY
-	// 1. GAMEPLAY!
+	// 1. Serialise map object so that it can be saved with the forest prefab
 	
-	// 2. 
+	// 2. Make game work from prefab
 	
-	// 3. 
+	// 3. GAMEPLAY!
 	
 	// TERRAIN
 	// Things to jump over

@@ -1,10 +1,10 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Collections;
 
 public class PlayerControl : MonoBehaviour {
 	
 	public float moveSpeed = 0.02f;
-	public Forest paths;
+	public Forest forest;
 	public float runThreshold = 0.25f;
 	public float jumpForce = 10f;
 	public float gravity = 0.25f;
@@ -32,7 +32,7 @@ public class PlayerControl : MonoBehaviour {
 	// Update is called once per frame
 	void Update () {
 	
-		if (paths != null && !paths.ready) return;
+		if (forest == null) return;
 		
 		bool rotateIt = false;
 		rotateIt = Input.GetAxis("Switch") != 0;
@@ -92,9 +92,9 @@ public class PlayerControl : MonoBehaviour {
 			isWalking = false;
 		}
 		
-		if (paths != null) {
+		if (forest != null) {
 			Vector3 pos = gameObject.transform.localPosition;
-			pos.y = paths.GetYForPosition(pos);
+			pos.y = forest.GetYForPosition(pos);
 			gameObject.transform.localPosition = pos;
 		}
 		
@@ -123,9 +123,9 @@ public class PlayerControl : MonoBehaviour {
 	}
 	
 	MapLocation GetTransitLocation (Vector3 move, float yRotation) {
-		if (paths == null) return null;
+		if (forest == null) return null;
 		Vector3 transformedMove = GetTransformedMove (yRotation) * move.x;
-		MapLocation location = paths.GetTransitLocationForMove(gameObject.transform.position, transformedMove, IsRotated(yRotation));
+		MapLocation location = forest.GetTransitLocationForMove(gameObject.transform.position, transformedMove, IsRotated(yRotation));
 		
 		if (location == null || (!location.tag.Equals("path") && !location.tag.Equals("entrance"))) return null;
 		return location;
@@ -183,6 +183,6 @@ public class PlayerControl : MonoBehaviour {
 		int x = Mathf.RoundToInt(gameObject.transform.localPosition.x);
 		int z = Mathf.RoundToInt(gameObject.transform.localPosition.z);
 		int r = Mathf.RoundToInt(yRotation);
-		if (paths != null) paths.UpdateForestAreaVisibility (x, z, r);
+		if (forest != null) forest.UpdateForestAreaVisibility (x, z, r);
 	}
 }

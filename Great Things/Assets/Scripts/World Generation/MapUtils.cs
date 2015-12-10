@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public class MapUtils {
 
@@ -14,10 +15,9 @@ public class MapUtils {
 	// then builds an array containing the heights of each location quad's corners
 	public static void SetHeightsForMap (Map map, SeededRandomiser randomiser)
 	{
-		MapLocation[,] locations = map.locations;
 		int hilliness = map.hilliness;
-		int mapWidth = locations.GetLength(0);
-		int mapDepth = locations.GetLength(1);
+		int mapWidth = map.mapWidth;
+		int mapDepth = map.mapDepth;
 		if (hilliness == 0)
 			return;
 		int c = hilliness * 100;
@@ -25,120 +25,119 @@ public class MapUtils {
 			int x = Mathf.RoundToInt (randomiser.GetRandomFromRange (0, mapWidth));
 			int z = Mathf.RoundToInt (randomiser.GetRandomFromRange (0, mapDepth));
 			
-			if (IsNextToWater(locations, x, z)) {
+			if (IsNextToWater(map, x, z)) {
 				float value = (randomiser.GetRandom () * 0.1f) - 0.05f;
-				ChangeHeightForPosition (x, z, mapWidth, mapDepth, locations, value, true);
+				ChangeHeightForPosition (x, z, map, value, true);
 				c--;
 			} else {
 				float value = (randomiser.GetRandom () * 0.5f) - 0.25f;
-				ChangeHeightForPosition (x, z, mapWidth, mapDepth, locations, value, true);
+				ChangeHeightForPosition (x, z, map, value, true);
 			}
 		}
 		
 		SetCornerHeights(map);
 	}
 	
-	public static bool IsNextToWater (MapLocation[,] locations, int x, int z) {
-		return IsWater(locations, x+1, z) ||
-			IsWater(locations, x, z+1) ||
-				IsWater(locations, x-1, z) ||
-				IsWater(locations, x, z-1) ||
-				IsWater(locations, x+1, z+1) ||
-				IsWater(locations, x-1, z+1) ||
-				IsWater(locations, x+1, z-1) ||
-				IsWater(locations, x-1, z-1);
+	public static bool IsNextToWater (Map map, int x, int z) {
+		return IsWater(map, x+1, z) ||
+			IsWater(map, x, z+1) ||
+				IsWater(map, x-1, z) ||
+				IsWater(map, x, z-1) ||
+				IsWater(map, x+1, z+1) ||
+				IsWater(map, x-1, z+1) ||
+				IsWater(map, x+1, z-1) ||
+				IsWater(map, x-1, z-1);
 	}
 	
-	public static bool IsWater (MapLocation[,] locations, int x, int z) {
-		if (x < 0 || x >= locations.GetLength(0)) return false;
-		if (z < 0 || z >= locations.GetLength(1)) return false;
+	public static bool IsWater (Map map, int x, int z) {
+		if (x < 0 || x >= map.mapWidth) return false;
+		if (z < 0 || z >= map.mapDepth) return false;
 		
-		bool nextToPool = locations[x, z].tag.Equals("pool");
+		bool nextToPool = map.GetMapLocationForPosition(x, z).tag.Equals("pool");
 		return nextToPool;
 	}
 	
 	// changes the height for the location at xz
 	// if recurse is true, then the heights of surrounding tiles will be modified to give a smoother contour
-	public static void ChangeHeightForPosition (int x, int z, int mapWidth, int mapDepth, MapLocation[,] locations, float value, bool recurse)
+	public static void ChangeHeightForPosition (int x, int z, Map map, float value, bool recurse)
 	{
-		if (!MapUtils.IsMapPositionValid(x, z, mapWidth, mapDepth)) return;
-		MapLocation location = locations [x, z];
+		if (!MapUtils.IsMapPositionValid(x, z, map.mapWidth, map.mapDepth)) return;
+		MapLocation location = map.GetMapLocationForPosition(x, z);
 		if (location == null) return;
 		float currentValue = location.y;
 		currentValue += value;
-		locations [x, z].y = currentValue;
+		location.y = currentValue;
 		
 		if (recurse) {
-			ChangeHeightForSurroundingLocations(x, z, mapWidth, mapDepth, locations, value);
+			ChangeHeightForSurroundingLocations(x, z, map, value);
 		}
 	}
 	
 	// Changes the heights of the tiles around the given tile
-	public static void ChangeHeightForSurroundingLocations (int x, int z, int mapWidth, int mapDepth, MapLocation[,] locations, float value) {
+	public static void ChangeHeightForSurroundingLocations (int x, int z, Map map, float value) {
 		float halfValue = value * 0.5f;
 		float quarterValue = value * 0.25f;
 		
-		ChangeHeightForPosition (x - 1, z, mapWidth, mapDepth, locations, halfValue, false);
-		ChangeHeightForPosition (x - 2, z, mapWidth, mapDepth, locations, quarterValue, false);
-		ChangeHeightForPosition (x + 1, z, mapWidth, mapDepth, locations, halfValue, false);
-		ChangeHeightForPosition (x + 2, z, mapWidth, mapDepth, locations, quarterValue, false);
-		ChangeHeightForPosition (x, z - 1, mapWidth, mapDepth, locations, halfValue, false);
-		ChangeHeightForPosition (x, z - 2, mapWidth, mapDepth, locations, quarterValue, false);
-		ChangeHeightForPosition (x, z + 1, mapWidth, mapDepth, locations, halfValue, false);
-		ChangeHeightForPosition (x, z + 2, mapWidth, mapDepth, locations, quarterValue, false);
-		ChangeHeightForPosition (x - 1, z - 1, mapWidth, mapDepth, locations, quarterValue, false);
-		ChangeHeightForPosition (x - 1, z + 1, mapWidth, mapDepth, locations, quarterValue, false);
-		ChangeHeightForPosition (x + 1, z - 1, mapWidth, mapDepth, locations, quarterValue, false);
-		ChangeHeightForPosition (x + 1, z + 1, mapWidth, mapDepth, locations, quarterValue, false);
+		ChangeHeightForPosition (x - 1, z, map, halfValue, false);
+		ChangeHeightForPosition (x - 2, z, map, quarterValue, false);
+		ChangeHeightForPosition (x + 1, z, map, halfValue, false);
+		ChangeHeightForPosition (x + 2, z, map, quarterValue, false);
+		ChangeHeightForPosition (x, z - 1, map, halfValue, false);
+		ChangeHeightForPosition (x, z - 2, map, quarterValue, false);
+		ChangeHeightForPosition (x, z + 1, map, halfValue, false);
+		ChangeHeightForPosition (x, z + 2, map, quarterValue, false);
+		ChangeHeightForPosition (x - 1, z - 1, map, quarterValue, false);
+		ChangeHeightForPosition (x - 1, z + 1, map, quarterValue, false);
+		ChangeHeightForPosition (x + 1, z - 1, map, quarterValue, false);
+		ChangeHeightForPosition (x + 1, z + 1, map, quarterValue, false);
 	}
 	
 	// Sets the corner heights each of the map locations, which can then be used to set the vertex height positions
 	public static void SetCornerHeights (Map map) {
-		MapLocation[,] locations = map.locations;
 		
 		for (int z = 0; z < map.mapDepth; z++) {
-			for (int x = 0; x < map.mapDepth; x++) {
-				MapLocation location = map.locations[x, z];
+			for (int x = 0; x < map.mapWidth; x++) {
+				MapLocation location = map.GetMapLocationForPosition(x, z);
 				for (int i = 0; i < 4; i++) {
-					location.corners[i] = MapUtils.GetHeightForPosition(locations, x, z, i);
+					location.corners[i] = MapUtils.GetHeightForPosition(map, x, z, i);
 				}
 			}
 		}
 	}
 	
 	// Finds the average height for the 4 location corners surrounding the given vertex at the xz position
-	public static float GetHeightForPosition (MapLocation[,] locations, int x, int z, int vertex) {
+	public static float GetHeightForPosition (Map map, int x, int z, int vertex) {
 		
-		MapLocation location = locations[x, z]; 
+		MapLocation location = map.GetMapLocationForPosition(x, z);
 		float a = 0;
 		float b = 0;
 		float c = 0;
 		float d = location == null ? 0 : location.y;
 		
 		if (vertex == 0 || vertex == 1) {
-			c = GetHeightForPosition(locations, x, z + 1);
+			c = GetHeightForPosition(map, x, z + 1);
 		}
 		
 		if (vertex == 3 || vertex == 2) {
-			c = GetHeightForPosition(locations, x, z - 1);
+			c = GetHeightForPosition(map, x, z - 1);
 		}
 		
 		if (vertex == 0 || vertex == 2) {
-			b = GetHeightForPosition(locations, x + 1, z);
+			b = GetHeightForPosition(map, x + 1, z);
 		}
 		
 		if (vertex == 1 || vertex == 3) {
-			b = GetHeightForPosition(locations, x - 1, z);
+			b = GetHeightForPosition(map, x - 1, z);
 		}
 		
 		if (vertex == 0) {
-			a = GetHeightForPosition(locations, x + 1, z + 1);	
+			a = GetHeightForPosition(map, x + 1, z + 1);	
 		} else if (vertex == 1) {
-			a = GetHeightForPosition(locations, x - 1, z + 1);
+			a = GetHeightForPosition(map, x - 1, z + 1);
 		} else if (vertex == 2) {
-			a = GetHeightForPosition(locations, x + 1, z - 1);
+			a = GetHeightForPosition(map, x + 1, z - 1);
 		} else if (vertex == 3) {
-			a = GetHeightForPosition(locations, x - 1, z - 1);
+			a = GetHeightForPosition(map, x - 1, z - 1);
 			
 		}
 		
@@ -146,8 +145,8 @@ public class MapUtils {
 	}
 	
 	// Gets the height for the position, or 0 if the position is not valid
-	public static float GetHeightForPosition (MapLocation[,] locations, int x, int z) {
-		if (IsMapPositionValid(x, z, locations.GetLength(0), locations.GetLength(1))) return locations[x, z].y;
+	public static float GetHeightForPosition (Map map, int x, int z) {
+		if (IsMapPositionValid(x, z, map.mapWidth, map.mapDepth)) return map.GetMapLocationForPosition(x, z).y;
 		return 0;
 	}
 }

@@ -1,12 +1,12 @@
 ﻿using UnityEngine;
 using System.Collections;
 
+[System.Serializable]
 public class MapLocation {
 	public int x;
 	public float y;
 	public int z;
-	public MapLocation[] linkedLocations;
-	public MapLocation[] exits;
+	public Vector2[] linkedLocations;
 	public Color colour;
 	public float[] corners;
 	public string tag;
@@ -16,8 +16,7 @@ public class MapLocation {
 		this.y = y;
 		this.z = z;
 		this.tag = tag;
-		linkedLocations = new MapLocation[9];
-		exits = new MapLocation[4];
+		linkedLocations = new Vector2[9];
 		corners = new float[4];
 	}
 	
