@@ -4,25 +4,12 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEditor;
 
-public class ForestGenerator : MonoBehaviour
-{
-	public List<ColourMaterialMap> materialMaps;
+public class ForestGenerator : LocaleGenerator {
 	
-	public List<Color> poolLightColours;
-	public List<Color> forestLightColours;
-	
-	public GameObject player;
-	public Texture2D pathMap;
 	public int hilliness = 2;
-	public int drawDistance = 10;
 	public float pathInsetAmount = 0.05f;
-	public bool saveToPrefabOnComplete = false;
-	
-	Locale forest;
 	
 	Vector3 pathInset;
-	
-	Queue<Func<IEnumerator>> generationQueue = new Queue<Func<IEnumerator>>();
 	
 	public static readonly Color BLANK_PIXEL = new Color (0, 0, 0f, 1f);
 	public static readonly Color PATH_PIXEL = new Color (235f / 255f, 137f / 255f, 49f / 255f, 1f);
@@ -32,38 +19,17 @@ public class ForestGenerator : MonoBehaviour
 	public static readonly Color POOL = new Color (0, 179f / 255f, 224f / 255f, 1f);
 	
 	// Use this for initialization
-	void Start ()
+	override internal void Setup ()
 	{
 		pathInset = new Vector3(0, pathInsetAmount, 0);
-		
-		SeededRandomiser randomiser = new SeededRandomiser(12345678);
-		Map map = CreateMap(randomiser);
-		CreateForestParentObjects(map, randomiser);
-		
-		StartCoroutine(StartGeneratorQueue());
+		parentObjectName = "Forest";
+		base.Setup();
 	}
 	
-	IEnumerator StartGeneratorQueue () {
-		generationQueue.Enqueue(()=>CreatePath(forest.map));
-		generationQueue.Enqueue(()=>CreateForestAreas(forest.map));
+	override internal void PopulateGenerationQueue () {
+		generationQueue.Enqueue(()=>CreatePath(locale.map));
+		generationQueue.Enqueue(()=>CreateForestAreas(locale.map));
 		generationQueue.Enqueue(CompleteSetup);
-		
-		while(true)
-		{
-			if(generationQueue.Count > 0)
-			{
-				yield return StartCoroutine(generationQueue.Dequeue()());
-			}
-			else yield return null;
-		}
-	}
-	
-	ColourMaterialMap GetMaterialMapForName (string name) {
-		foreach (ColourMaterialMap map in materialMaps) {
-			if (map.name == name) return map;
-		}
-		
-		return null;
 	}
 	
 	// Update is called once per frame
@@ -72,26 +38,7 @@ public class ForestGenerator : MonoBehaviour
 		
 	}
 	
-	void CreateForestParentObjects (Map map, SeededRandomiser randomiser) {
-		GameObject forestGO = new GameObject ();
-		forestGO.name = "Forest";
-		forestGO.transform.parent = transform;
-		
-		forest = forestGO.AddComponent(typeof(Locale)) as Locale;
-		forest.map = map;
-		forest.drawDistance = drawDistance;
-		forest.SetRandomiser(randomiser);
-		forest.PositionPlayer(player);
-		
-		Vector3 pos = Vector3.zero;
-		pos.y = 0.5f;
-		forestGO.transform.localPosition = pos;
-		
-		forest.sublocales = new List<GameObject>();
-	}
-	
-	Map CreateMap (SeededRandomiser randomiser) {
-	
+	override internal Map CreateMap (SeededRandomiser randomiser) {
 		MapTag[] tags = {new MapTag(PATH_PIXEL, "path"), 
 			new MapTag(ENTRANCE_PIXEL, "entrance"),
 			new MapTag(FOREST_PIXEL, "forest"),
@@ -110,8 +57,8 @@ public class ForestGenerator : MonoBehaviour
 		Vector3[] vertices = GetVerticesForFlatQuad();
 		Vector3 position = Vector3.zero;
 		
-		Material material = GetMaterialMapForName("Path").getMaterial(forest.randomiser);
-		Material underMaterial = GetMaterialMapForName("Ground").getMaterial(forest.randomiser);
+		Material material = GetMaterialMapForName("Path").getMaterial(locale.randomiser);
+		Material underMaterial = GetMaterialMapForName("Ground").getMaterial(locale.randomiser);
 		List<GameObject> quads = new List<GameObject>();
 		List<GameObject> underQuads = new List<GameObject>();
 		int depth = map.mapDepth;
@@ -141,13 +88,13 @@ public class ForestGenerator : MonoBehaviour
 		}
 		
 		GameObject paths = MeshUtils.CombineQuads("paths", quads.ToArray(), material, true);
-		paths.transform.parent = forest.gameObject.transform;
+		paths.transform.parent = locale.gameObject.transform;
 		paths.transform.position = paths.transform.position - pathInset;
 		paths.AddComponent(typeof(MeshCollider));
 		GameObjectUtility.SetStaticEditorFlags(paths, StaticEditorFlags.LightmapStatic);
 		
 		GameObject underPaths = MeshUtils.CombineQuads("underPaths", underQuads.ToArray(), underMaterial, true);
-		underPaths.transform.parent = forest.gameObject.transform;
+		underPaths.transform.parent = locale.gameObject.transform;
 		
 		yield return null;
 	}
@@ -177,7 +124,7 @@ public class ForestGenerator : MonoBehaviour
 	}
 	
 	public bool LocationIsPath (Vector3 position) {
-		MapLocation location = forest.map.GetMapLocationForPosition(position);
+		MapLocation location = locale.map.GetMapLocationForPosition(position);
 		if (location == null) return false;
 		return !location.tag.Equals("forest");
 	}
@@ -233,7 +180,7 @@ public class ForestGenerator : MonoBehaviour
 	// if the given colour is not in the groundMaterialMap, it will return false
 	bool ShouldCreateAForestArea (Color pixel, int x, int z, ColourMaterialMap matMap) {
 		
-		if (InForestArea (forest.sublocales, x, z, true)) return false;
+		if (InForestArea (locale.sublocales, x, z, true)) return false;
 		foreach (Color color in matMap.colors) {
 			if (ColourUtils.Match (pixel, color)) return true;
 		}
@@ -245,11 +192,11 @@ public class ForestGenerator : MonoBehaviour
 	
 		Camera mainCamera = Camera.main;
 		SmoothCameraTracker sct = mainCamera.GetComponent<SmoothCameraTracker>();
-		sct.locale = forest;
-		forest.SetReady(player);
+		sct.locale = locale;
+		locale.SetReady(player);
 		
 		if (saveToPrefabOnComplete) {
-			PrefabUtils.GenerateNestedPrefab(forest.gameObject, "Meshes", "Prefabs");
+			PrefabUtils.GenerateNestedPrefab(locale.gameObject, "Meshes", "Prefabs");
 		}
 		yield return null;
 	}
@@ -257,24 +204,24 @@ public class ForestGenerator : MonoBehaviour
 	public void CreateForestArea (Color pixel, Color currentPixel, int x, int z) {
 		GameObject forestGO = new GameObject ();
 		forestGO.name = "forestArea";
-		forestGO.transform.parent = forest.transform;
+		forestGO.transform.parent = locale.transform;
 		Sublocale forestArea = forestGO.AddComponent <Sublocale>() as Sublocale;
 		int areaWidth = 0;
 		forestArea.type = "forest";
 		int areaHeight = 0;
 		while (pixel.Equals(currentPixel)) {
 			areaHeight++;
-			pixel = forest.map.GetPixelForLocation (x, z + areaHeight);
+			pixel = locale.map.GetPixelForLocation (x, z + areaHeight);
 		}
-		pixel = forest.map.GetPixelForLocation (x, z);
+		pixel = locale.map.GetPixelForLocation (x, z);
 		while (pixel.Equals(currentPixel)) {
 			areaWidth++;
-			pixel = forest.map.GetPixelForLocation (x + areaWidth, z);
+			pixel = locale.map.GetPixelForLocation (x + areaWidth, z);
 		}
 		
 		forestArea.rect = new Rect(x, z, areaWidth, areaHeight);
 		CreateForestSublocaleFeatures(forestArea, x, z, areaWidth, areaHeight);
-		forest.sublocales.Add (forestGO);
+		locale.sublocales.Add (forestGO);
 		
 		forestArea.RendererEnabled = false;
 		
@@ -286,29 +233,29 @@ public class ForestGenerator : MonoBehaviour
 	public void CreatePoolArea (Color pixel, Color currentPixel, int x, int z) {
 		GameObject poolGO = new GameObject ();
 		poolGO.name = "poolArea";
-		poolGO.transform.parent = forest.transform;
+		poolGO.transform.parent = locale.transform;
 		Sublocale forestArea = poolGO.AddComponent <Sublocale>() as Sublocale;
 		forestArea.type = "pool";
 		int areaWidth = 0;
 		int areaHeight = 0;
 		while (pixel.Equals(currentPixel)) {
 			areaHeight++;
-			pixel = forest.map.GetPixelForLocation (x, z + areaHeight);
+			pixel = locale.map.GetPixelForLocation (x, z + areaHeight);
 		}
-		pixel = forest.map.GetPixelForLocation (x, z);
+		pixel = locale.map.GetPixelForLocation (x, z);
 		while (pixel.Equals(currentPixel)) {
 			areaWidth++;
-			pixel = forest.map.GetPixelForLocation (x + areaWidth, z);
+			pixel = locale.map.GetPixelForLocation (x + areaWidth, z);
 		}
 	
 		forestArea.rect = new Rect(x, z, areaWidth, areaHeight);
-		forestArea.Ground = CreateWater (x - 0.5f, z - 0.5f, areaWidth, areaHeight, forest.map, GetMaterialMapForName("Water").getMaterial(forest.randomiser));
+		forestArea.Ground = CreateWater (x - 0.5f, z - 0.5f, areaWidth, areaHeight, locale.map, GetMaterialMapForName("Water").getMaterial(locale.randomiser));
 		MeshUtils.JitterMeshOnY(forestArea.Ground, -10, 10, 0.01f, -0.1f, 0.1f);
-		forest.sublocales.Add (poolGO);
+		locale.sublocales.Add (poolGO);
 		
 		forestArea.RendererEnabled = false;
 		
-		int index = forest.randomiser.GetRandomIntFromRange(0, poolLightColours.Count - 1);
+		int index = locale.randomiser.GetRandomIntFromRange(0, poolLightColours.Count - 1);
 		Color colour = poolLightColours[index];
 		CreateLightForArea(poolGO, x, z, (float)areaWidth, (float)areaHeight, colour, 8);
 	}
@@ -326,8 +273,8 @@ public class ForestGenerator : MonoBehaviour
 	
 	// Creates the trees, bushes, rocks etc. for the given forestArea
 	void CreateForestSublocaleFeatures (Sublocale forestSublocale, int x, int z, int areaWidth, int areaHeight) {
-		SeededRandomiser randomiser = forest.randomiser;
-		Map map = forest.map;
+		SeededRandomiser randomiser = locale.randomiser;
+		Map map = locale.map;
 		forestSublocale.Ground = CreateGround (x - 0.5f, z - 0.5f, areaWidth, areaHeight, map, GetMaterialMapForName("Ground").getMaterial(randomiser));
 		forestSublocale.Ground.AddComponent(typeof(MeshCollider));	
 		forestSublocale.AddFeatures(CreateForestFeatures ("trees", forestSublocale.rect, 4f, 0.5f, map, 1.1f, randomiser, GetMaterialMapForName("Tree")));
@@ -448,7 +395,7 @@ public class ForestGenerator : MonoBehaviour
 			float xPosition = randomiser.GetRandomFromRange(0.5f, rect.xMax - rect.xMin - 1f);
 			float zPosition = randomiser.GetRandomFromRange(0.5f, rect.yMax - rect.yMin - 1f);
 			Vector3 pos = new Vector3(xPosition, 0, zPosition);
-			pos.y = (scale / 2) + forest.GetYForPosition(new Vector3(holderPos.x + xPosition, 0, holderPos.z + zPosition)) - 0.01f;
+			pos.y = (scale / 2) + locale.GetYForPosition(new Vector3(holderPos.x + xPosition, 0, holderPos.z + zPosition)) - 0.01f;
 			if (IsValidPosition(pos, objects, objectsMade, minimumDistanceBetween)) {	
 				CreateDoubleSidedForestObjectQuad(material, scale, pos, objects);
 				timeout = timeoutMax;
