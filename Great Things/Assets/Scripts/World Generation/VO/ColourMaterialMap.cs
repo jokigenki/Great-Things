@@ -7,8 +7,6 @@ public class ColourMaterialMap {
 	public string name;
 	public Color[] colors;
 	public Material[] materials;
-	//	public Material foregroundMaterial;
-	//	public Material backgroundMaterial;
 	
 	public Material getMaterial (SeededRandomiser rnd) {
 		if (materials.Length == 0) return null;

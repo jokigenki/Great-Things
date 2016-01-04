@@ -4,7 +4,7 @@ using System.Collections;
 public class PlayerControl : MonoBehaviour {
 	
 	public float moveSpeed = 0.02f;
-	public Forest forest;
+	public Locale locale;
 	public float runThreshold = 0.25f;
 	public float jumpForce = 10f;
 	public float gravity = 0.25f;
@@ -32,7 +32,7 @@ public class PlayerControl : MonoBehaviour {
 	// Update is called once per frame
 	void Update () {
 	
-		if (forest == null) return;
+		if (locale == null) return;
 		
 		bool rotateIt = false;
 		rotateIt = Input.GetAxis("Switch") != 0;
@@ -92,13 +92,13 @@ public class PlayerControl : MonoBehaviour {
 			isWalking = false;
 		}
 		
-		if (forest != null) {
+		if (locale != null) {
 			Vector3 pos = gameObject.transform.localPosition;
-			pos.y = forest.GetYForPosition(pos);
+			pos.y = locale.GetYForPosition(pos);
 			gameObject.transform.localPosition = pos;
 		}
 		
-		UpdateForestMakers();
+		UpdateLocaleVisibility();
 		UpdateAnimator(move);
 	}
 	
@@ -123,9 +123,9 @@ public class PlayerControl : MonoBehaviour {
 	}
 	
 	MapLocation GetTransitLocation (Vector3 move, float yRotation) {
-		if (forest == null) return null;
+		if (locale == null) return null;
 		Vector3 transformedMove = GetTransformedMove (yRotation) * move.x;
-		MapLocation location = forest.GetTransitLocationForMove(gameObject.transform.position, transformedMove, IsRotated(yRotation));
+		MapLocation location = locale.GetTransitLocationForMove(gameObject.transform.position, transformedMove, IsRotated(yRotation));
 		
 		if (location == null || (!location.tag.Equals("path") && !location.tag.Equals("entrance"))) return null;
 		return location;
@@ -179,10 +179,10 @@ public class PlayerControl : MonoBehaviour {
 		return angle;
 	}
 	
-	void UpdateForestMakers () {
+	void UpdateLocaleVisibility () {
 		int x = Mathf.RoundToInt(gameObject.transform.localPosition.x);
 		int z = Mathf.RoundToInt(gameObject.transform.localPosition.z);
 		int r = Mathf.RoundToInt(yRotation);
-		if (forest != null) forest.UpdateForestAreaVisibility (x, z, r);
+		if (locale != null) locale.UpdateAreaVisibility (x, z, r);
 	}
 }

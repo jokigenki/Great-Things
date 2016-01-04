@@ -28,7 +28,7 @@ public class MeshUtils {
 		MeshRenderer meshRenderer = (MeshRenderer)plane.AddComponent(typeof(MeshRenderer));
 		if (mat != null) meshRenderer.material = mat;
 		meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-		meshRenderer.receiveShadows = false;
+		meshRenderer.receiveShadows = true;
 		return plane;
 	}
 	
@@ -111,7 +111,7 @@ public class MeshUtils {
 		MeshRenderer mr = (MeshRenderer)combined.AddComponent(typeof(MeshRenderer));
 		mr.material = material;
 		mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-		mr.receiveShadows = false;
+		mr.receiveShadows = true;
 		
 		return combined;
 	}

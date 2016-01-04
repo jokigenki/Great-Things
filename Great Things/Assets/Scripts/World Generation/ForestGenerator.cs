@@ -6,12 +6,8 @@ using UnityEditor;
 
 public class ForestGenerator : MonoBehaviour
 {
-	public ColourMaterialMap treeMaterialMap;
-	public ColourMaterialMap bushMaterialMap;
-	public ColourMaterialMap rockMaterialMap;
-	public ColourMaterialMap groundMaterialMap;
-	public ColourMaterialMap waterMaterialMap;
-	public ColourMaterialMap pathMaterialMap;
+	public List<ColourMaterialMap> materialMaps;
+	
 	public List<Color> poolLightColours;
 	public List<Color> forestLightColours;
 	
@@ -20,8 +16,9 @@ public class ForestGenerator : MonoBehaviour
 	public int hilliness = 2;
 	public int drawDistance = 10;
 	public float pathInsetAmount = 0.05f;
+	public bool saveToPrefabOnComplete = false;
 	
-	Forest forest;
+	Locale forest;
 	
 	Vector3 pathInset;
 	
@@ -61,6 +58,14 @@ public class ForestGenerator : MonoBehaviour
 		}
 	}
 	
+	ColourMaterialMap GetMaterialMapForName (string name) {
+		foreach (ColourMaterialMap map in materialMaps) {
+			if (map.name == name) return map;
+		}
+		
+		return null;
+	}
+	
 	// Update is called once per frame
 	void Update ()
 	{
@@ -72,7 +77,7 @@ public class ForestGenerator : MonoBehaviour
 		forestGO.name = "Forest";
 		forestGO.transform.parent = transform;
 		
-		forest = forestGO.AddComponent(typeof(Forest)) as Forest;
+		forest = forestGO.AddComponent(typeof(Locale)) as Locale;
 		forest.map = map;
 		forest.drawDistance = drawDistance;
 		forest.SetRandomiser(randomiser);
@@ -82,7 +87,7 @@ public class ForestGenerator : MonoBehaviour
 		pos.y = 0.5f;
 		forestGO.transform.localPosition = pos;
 		
-		forest.forestAreas = new List<GameObject>();
+		forest.sublocales = new List<GameObject>();
 	}
 	
 	Map CreateMap (SeededRandomiser randomiser) {
@@ -105,8 +110,8 @@ public class ForestGenerator : MonoBehaviour
 		Vector3[] vertices = GetVerticesForFlatQuad();
 		Vector3 position = Vector3.zero;
 		
-		Material material = pathMaterialMap.getMaterial(forest.randomiser);
-		Material underMaterial = groundMaterialMap.getMaterial(forest.randomiser);
+		Material material = GetMaterialMapForName("Path").getMaterial(forest.randomiser);
+		Material underMaterial = GetMaterialMapForName("Ground").getMaterial(forest.randomiser);
 		List<GameObject> quads = new List<GameObject>();
 		List<GameObject> underQuads = new List<GameObject>();
 		int depth = map.mapDepth;
@@ -138,7 +143,8 @@ public class ForestGenerator : MonoBehaviour
 		GameObject paths = MeshUtils.CombineQuads("paths", quads.ToArray(), material, true);
 		paths.transform.parent = forest.gameObject.transform;
 		paths.transform.position = paths.transform.position - pathInset;
-		paths.AddComponent(typeof(MeshCollider));	
+		paths.AddComponent(typeof(MeshCollider));
+		GameObjectUtility.SetStaticEditorFlags(paths, StaticEditorFlags.LightmapStatic);
 		
 		GameObject underPaths = MeshUtils.CombineQuads("underPaths", underQuads.ToArray(), underMaterial, true);
 		underPaths.transform.parent = forest.gameObject.transform;
@@ -211,10 +217,10 @@ public class ForestGenerator : MonoBehaviour
 			for (int x = 0; x < map.mapWidth; x++) {
 				Color pixel = map.GetPixelForLocation (x, z);
 				Color currentPixel = pixel;
-				if (ShouldCreateAForestArea(pixel, x, z, groundMaterialMap)) {
+				if (ShouldCreateAForestArea(pixel, x, z, GetMaterialMapForName("Ground"))) {
 					CreateForestArea(pixel, currentPixel, x, z);
 					yield return null;
-				} else if (ShouldCreateAForestArea(pixel, x, z, waterMaterialMap)) {
+				} else if (ShouldCreateAForestArea(pixel, x, z, GetMaterialMapForName("Water"))) {
 					CreatePoolArea(pixel, currentPixel, x, z);
 					yield return null;
 				}
@@ -227,19 +233,24 @@ public class ForestGenerator : MonoBehaviour
 	// if the given colour is not in the groundMaterialMap, it will return false
 	bool ShouldCreateAForestArea (Color pixel, int x, int z, ColourMaterialMap matMap) {
 		
-		if (InForestArea (forest.forestAreas, x, z, true)) return false;
+		if (InForestArea (forest.sublocales, x, z, true)) return false;
 		foreach (Color color in matMap.colors) {
-			if (pixel.Equals(color)) return true;
+			if (ColourUtils.Match (pixel, color)) return true;
 		}
 		
 		return false;
 	}
 	
 	IEnumerator CompleteSetup() {
+	
+		Camera mainCamera = Camera.main;
+		SmoothCameraTracker sct = mainCamera.GetComponent<SmoothCameraTracker>();
+		sct.locale = forest;
 		forest.SetReady(player);
 		
-		PrefabUtils.GenerateNestedPrefab(forest.gameObject, "Meshes", "Prefabs");
-		
+		if (saveToPrefabOnComplete) {
+			PrefabUtils.GenerateNestedPrefab(forest.gameObject, "Meshes", "Prefabs");
+		}
 		yield return null;
 	}
 	
@@ -247,7 +258,7 @@ public class ForestGenerator : MonoBehaviour
 		GameObject forestGO = new GameObject ();
 		forestGO.name = "forestArea";
 		forestGO.transform.parent = forest.transform;
-		ForestArea forestArea = forestGO.AddComponent <ForestArea>() as ForestArea;
+		Sublocale forestArea = forestGO.AddComponent <Sublocale>() as Sublocale;
 		int areaWidth = 0;
 		forestArea.type = "forest";
 		int areaHeight = 0;
@@ -262,21 +273,21 @@ public class ForestGenerator : MonoBehaviour
 		}
 		
 		forestArea.rect = new Rect(x, z, areaWidth, areaHeight);
-		CreateForestAreaObjects(forestArea, x, z, areaWidth, areaHeight);
-		forest.forestAreas.Add (forestGO);
+		CreateForestSublocaleFeatures(forestArea, x, z, areaWidth, areaHeight);
+		forest.sublocales.Add (forestGO);
 		
 		forestArea.RendererEnabled = false;
 		
-		int index = forest.randomiser.GetRandomIntFromRange(0, forestLightColours.Count - 1);
-		Color colour = forestLightColours[index];
-		CreateLightForArea(forestGO, x, z, (float)areaWidth, (float)areaHeight, colour, 4);
+		//int index = forest.randomiser.GetRandomIntFromRange(0, forestLightColours.Count - 1);
+		//Color colour = forestLightColours[index];
+		//CreateLightForArea(forestGO, x, z, (float)areaWidth, (float)areaHeight, colour, 4);
 	}
 	
 	public void CreatePoolArea (Color pixel, Color currentPixel, int x, int z) {
 		GameObject poolGO = new GameObject ();
 		poolGO.name = "poolArea";
 		poolGO.transform.parent = forest.transform;
-		ForestArea forestArea = poolGO.AddComponent <ForestArea>() as ForestArea;
+		Sublocale forestArea = poolGO.AddComponent <Sublocale>() as Sublocale;
 		forestArea.type = "pool";
 		int areaWidth = 0;
 		int areaHeight = 0;
@@ -291,9 +302,9 @@ public class ForestGenerator : MonoBehaviour
 		}
 	
 		forestArea.rect = new Rect(x, z, areaWidth, areaHeight);
-		forestArea.Ground = CreateWater (x - 0.5f, z - 0.5f, areaWidth, areaHeight, forest.map, waterMaterialMap.getMaterial(forest.randomiser));
+		forestArea.Ground = CreateWater (x - 0.5f, z - 0.5f, areaWidth, areaHeight, forest.map, GetMaterialMapForName("Water").getMaterial(forest.randomiser));
 		MeshUtils.JitterMeshOnY(forestArea.Ground, -10, 10, 0.01f, -0.1f, 0.1f);
-		forest.forestAreas.Add (poolGO);
+		forest.sublocales.Add (poolGO);
 		
 		forestArea.RendererEnabled = false;
 		
@@ -314,14 +325,14 @@ public class ForestGenerator : MonoBehaviour
 	}
 	
 	// Creates the trees, bushes, rocks etc. for the given forestArea
-	void CreateForestAreaObjects (ForestArea forestArea, int x, int z, int areaWidth, int areaHeight) {
+	void CreateForestSublocaleFeatures (Sublocale forestSublocale, int x, int z, int areaWidth, int areaHeight) {
 		SeededRandomiser randomiser = forest.randomiser;
 		Map map = forest.map;
-		forestArea.Ground = CreateGround (x - 0.5f, z - 0.5f, areaWidth, areaHeight, map, groundMaterialMap.getMaterial(randomiser));
-		forestArea.Ground.AddComponent(typeof(MeshCollider));	
-		forestArea.AddForestObjects(CreateForestObjects ("trees", forestArea.rect, 4f, 0.5f, map, 1.1f, randomiser, treeMaterialMap));
-		forestArea.AddForestObjects(CreateForestObjects ("bushes", forestArea.rect, 0.25f, 0.9f, map, 0.4f, randomiser, bushMaterialMap));
-		forestArea.AddForestObjects(CreateForestObjects ("rocks", forestArea.rect, 0.2f, 1.5f, map, 0.2f, randomiser, rockMaterialMap));
+		forestSublocale.Ground = CreateGround (x - 0.5f, z - 0.5f, areaWidth, areaHeight, map, GetMaterialMapForName("Ground").getMaterial(randomiser));
+		forestSublocale.Ground.AddComponent(typeof(MeshCollider));	
+		forestSublocale.AddFeatures(CreateForestFeatures ("trees", forestSublocale.rect, 4f, 0.5f, map, 1.1f, randomiser, GetMaterialMapForName("Tree")));
+		forestSublocale.AddFeatures(CreateForestFeatures ("bushes", forestSublocale.rect, 0.25f, 0.9f, map, 0.4f, randomiser, GetMaterialMapForName("Bush")));
+		forestSublocale.AddFeatures(CreateForestFeatures ("rocks", forestSublocale.rect, 0.2f, 1.5f, map, 0.2f, randomiser, GetMaterialMapForName("Rock")));
 	}
 
 	// Is the given x, z value inside the existing forestAreas
@@ -329,7 +340,7 @@ public class ForestGenerator : MonoBehaviour
 	bool InForestArea (List<GameObject> forestAreas, int x, int z, bool enableRendererIfDisabled)
 	{
 		foreach (GameObject area in forestAreas) {
-			ForestArea maker = area.GetComponent<ForestArea> ();
+			Sublocale maker = area.GetComponent<Sublocale> ();
 			if (maker.Contains (x, z)) {
 				if (enableRendererIfDisabled && !maker.RendererEnabled) maker.RendererEnabled = true;
 				return true;
@@ -413,13 +424,19 @@ public class ForestGenerator : MonoBehaviour
 	}
 	
 	// Creates forest objects inside the given rectangle
-	public GameObject CreateForestObjects (string name, Rect rect, float scale, float density, Map map, float minimumDistanceBetween, SeededRandomiser randomiser, ColourMaterialMap materialMap) {
+	public SublocaleFeatures CreateForestFeatures (string name, Rect rect, float scale, float density, Map map, float minimumDistanceBetween, SeededRandomiser randomiser, ColourMaterialMap materialMap) {
+		
+		SublocaleFeatures forestObjects = new SublocaleFeatures();
 		
 		Vector3 holderPos = Vector3.zero;
 		holderPos.x = rect.x;
 		holderPos.y = 0f;
 		holderPos.z = rect.y;
 		int totalQuads = Mathf.RoundToInt(rect.width * rect.height * density);
+		
+		GameObject shadowCasters = new GameObject();
+		shadowCasters.transform.localPosition = holderPos;
+		shadowCasters.name = name + "_shadowCasters";
 		
 		Material material = materialMap.getMaterial(randomiser);
 		List<GameObject> objects = new List<GameObject>();
@@ -439,13 +456,24 @@ public class ForestGenerator : MonoBehaviour
 			} else {
 				timeout--;
 			}
+			/*
+			GameObject shadowCaster = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+			shadowCaster.name = "shadowCaster_" + objectsMade;
+			shadowCaster.transform.localPosition = pos;
+			shadowCaster.transform.localScale = new Vector3(scale / 2, scale / 2, scale / 2);
+			shadowCaster.transform.parent = shadowCasters.transform;
+			MeshRenderer mr = shadowCaster.GetComponent<MeshRenderer>();
+			mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
+			*/
 		}
 		
 		GameObject go = MeshUtils.CombineQuads(name, objects.ToArray(), material);
 		go.name = name;
 		go.transform.localPosition = holderPos;
 		
-		return go;
+		forestObjects.features = go;
+		forestObjects.shadowCasters = shadowCasters;
+		return forestObjects;
 	}
 	
 	// Creates 4 quads, each rotated by 90º from 45º
